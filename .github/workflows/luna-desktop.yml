@@ -84,8 +84,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     env:
-      HERMES_HOME: ${{ runner.temp }}/luna-native-test-home
-      LUNA_HOME: ${{ runner.temp }}/luna-native-test-home
+      HERMES_HOME: ${{ github.workspace }}/.luna-native-test-home
+      LUNA_HOME: ${{ github.workspace }}/.luna-native-test-home
       APPIMAGE_EXTRACT_AND_RUN: '1'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
