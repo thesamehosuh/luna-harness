@@ -188,7 +188,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Supported companion installation: no first-chat dependency downloads.
-luna = ["python-telegram-bot[webhooks]==22.8", "honcho-ai==2.2.0", "onnxruntime==1.27.0", "tokenizers==0.22.2", "jsonschema==4.26.0"]
+luna = ["python-telegram-bot[webhooks]==22.8", "honcho-ai==2.2.0", "onnxruntime==1.27.0; sys_platform != 'darwin' or platform_machine != 'x86_64'", "onnxruntime==1.23.2; sys_platform == 'darwin' and platform_machine == 'x86_64'", "tokenizers==0.22.2", "jsonschema==4.26.0"]
 # Native Anthropic provider — only needed when provider=anthropic (not via
 # OpenRouter or other aggregators).
 anthropic = ["anthropic==0.87.0"]  # CVE-2026-34450, CVE-2026-34452
@@ -232,7 +232,7 @@ voice = [
 # first /wake; mirrored in tools/lazy_deps.py.
 wake = [
   "openwakeword==0.6.0",
-  "onnxruntime==1.27.0",
+  "onnxruntime==1.27.0; sys_platform != 'darwin' or platform_machine != 'x86_64'", "onnxruntime==1.23.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
   "sherpa-onnx==1.13.4",
   "sentencepiece==0.2.2",
   "pvporcupine==4.0.3",

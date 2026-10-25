@@ -45,6 +45,7 @@ def _install(release, home, uv):
     if not (release / "hermes_cli/web_dist/index.html").is_file():
         raise ValueError("This release is missing its dashboard")
     env = dict(os.environ, HERMES_HOME=str(home), LUNA_HOME=str(home),
+               PYTHONUTF8="1", PYTHONIOENCODING="utf-8",
                UV_PYTHON_INSTALL_DIR=str(home / "runtime/python"),
                UV_CACHE_DIR=str(home / "cache/uv"), UV_PYTHON_PREFERENCE="only-managed",
                UV_PROJECT_ENVIRONMENT=str(release / "venv"),
@@ -62,7 +63,7 @@ def _install(release, home, uv):
         old = home / "no-valid-previous-release"
     if (old / ".ready").is_file():
         old_python = old / ("venv/Scripts/python.exe" if os.name == "nt" else "venv/bin/python")
-        run(old_python, "-I", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
+        run(old_python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
     print("LUNA_STAGE dependencies", flush=True)
     run(uv, "sync", "--project", release, "--python", "3.11", "--frozen", "--extra", "luna", "--no-dev", "--inexact")
     run(uv, "pip", "install", "--python", python, "--no-deps", "-e", release / "luna/lib")
@@ -74,7 +75,7 @@ def _install(release, home, uv):
         env["LUNA_BOOTSTRAP_SCOPED"] = "1"
         run("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
             "-Stage", "git", "-NonInteractive", "-Json", "-HermesHome", home, "-InstallDir", release)
-    run(python, "-I", "-c", "import luna_core, luna_cli, gateway, model_tools, hermes_cli.web_server")
+    run(python, "-I", "-X", "utf8", "-c", "import luna_core, luna_cli, gateway, model_tools, hermes_cli.web_server")
     (release / ".luna-state-home").write_text(str(home), encoding="utf-8")
     print("LUNA_STAGE personal-home", flush=True)
     # Seed through the existing product implementation, retaining existing settings.
@@ -83,10 +84,10 @@ def _install(release, home, uv):
     if not stack.exists():
         shutil.copytree(release / "luna/honcho", stack)
     # This also protects repair when the old pointer is damaged or absent.
-    run(python, "-I", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
+    run(python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
     if (old / ".ready").is_file():
         # Recheck after downloads, since the owner could have started the old gateway meanwhile.
-        run(old_python, "-I", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
+        run(old_python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
         from releases import _snapshot_state
         _snapshot_state(home)
     (release / ".ready").write_text("verified\n", encoding="utf-8")

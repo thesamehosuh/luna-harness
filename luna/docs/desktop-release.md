@@ -146,3 +146,11 @@ publication, provider availability and the unassisted user test remain release g
 References: [Tauri distribution](https://v2.tauri.app/distribute/),
 [Hermes native Windows](https://hermes-agent.nousresearch.com/docs/user-guide/windows-native),
 [GitHub runner platforms](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+## Native dependency support
+
+macOS launchers require macOS 14 or newer. Intel Macs use pinned ONNX Runtime 1.23.2,
+the last 1.23 patch with an Intel wheel; newer ONNX Runtime releases ship ARM-only Mac wheels.
+Other supported platforms use 1.27.0. Every native job installs the actual archive and runs
+the bundled multilingual model, so a missing platform wheel blocks publication. CI probes
+run through the explicitly selected Python 3.11 interpreter rather than a runner's system Python.

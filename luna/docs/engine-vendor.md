@@ -364,3 +364,14 @@ remain release gates; a Linux build or a Tauri window alone is not a portability
 Regressions: `luna/tests/component/test_ambient_jev_regressions.py`,
 `luna/tests/component/test_room_dispatch_gateway.py`, and
 `tests/gateway/test_plugin_message_injection.py`. Cached system/channel prompts are unchanged.
+
+Release platform dependency fix (2026-10-26): `pyproject.toml` and `uv.lock` select pinned
+ONNX Runtime 1.23.2 for Intel macOS and 1.27.0 elsewhere. The native launcher now declares
+macOS 14+ to match its dependency floor. Actual archive installation/embedding inference
+gates every native platform, including Intel Macs.
+
+Windows encoding follow-up: the native launcher's managed Python children, desktop installer
+and `hermes_cli/product_runtime.py` child environments select UTF-8. Isolated `-I` installer
+checks also pass `-X utf8`, since isolation ignores Python environment settings. This keeps
+Unicode templates/personas independent of a Windows account's legacy code page. The native
+command test and real Windows archive installation cover this contract.

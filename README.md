@@ -31,7 +31,7 @@ no hand-edited config files.
 1. Open [Downloads](https://github.com/thesamehosuh/luna-harness/releases) and choose the launcher
    for your operating system. Linux AppImage users may need **Properties → Permissions → Allow
    executing as a program**, then double-click. Linux packages can be opened in the system's
-   software installer. macOS/Windows builds are preview artifacts until their platform checks and
+   software installer. macOS 14+/Windows builds are preview artifacts until their platform checks and
    publisher signing are complete; see the release notes before installing them.
 2. Open **Luna**. It downloads a checksummed, versioned runtime with the dashboard and a small
    multilingual embedding model. You do not need Git, Python, Node or a terminal.

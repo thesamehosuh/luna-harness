@@ -53,6 +53,7 @@ def child_environment(env, home):
     if enabled():
         root = code_root(home)
         env.update(HERMES_HOME=str(home), LUNA_HOME=str(home), LUNA_PRODUCT="1",
+                   PYTHONUTF8="1", PYTHONIOENCODING="utf-8",
                    HERMES_PYTHON=executable(home), HERMES_PYTHON_SRC_ROOT=str(root),
                    PYTHONPATH=os.pathsep.join((str(root / "luna/lib"), str(root))))
         # A previous Hermes checkout's TUI must never be selected for this product.

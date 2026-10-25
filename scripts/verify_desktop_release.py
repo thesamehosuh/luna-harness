@@ -36,7 +36,7 @@ def verify(archive, uv, workspace):
                 with source.extractfile(member) as data, target.open("wb") as out: shutil.copyfileobj(data, out)
                 target.chmod(member.mode & 0o755)
     env = {k: v for k, v in os.environ.items() if not k.startswith(("HERMES_", "LUNA_", "HONCHO_", "OPENAI_", "OPENROUTER_")) and not k.endswith(("_KEY", "_TOKEN", "_SECRET", "_PASSWORD"))}
-    env.update(HERMES_HOME=str(install), LUNA_HOME=str(install), XDG_CACHE_HOME=str(workspace / "cache"),
+    env.update(HERMES_HOME=str(install), LUNA_HOME=str(install), PYTHONUTF8="1", PYTHONIOENCODING="utf-8", XDG_CACHE_HOME=str(workspace / "cache"),
                UV_PYTHON_INSTALL_DIR=str(install / "runtime/python"), UV_CACHE_DIR=str(workspace / "uv-cache"))
     env.pop("PYTHONPATH", None); env.pop("PYTHONHOME", None); env.pop("VIRTUAL_ENV", None)
     args = [str(uv), "run", "--no-project", "--managed-python", "--python", "3.11", str(release / "luna/deploy/desktop_install.py"), "--home", str(install), "--uv", str(uv)]
@@ -58,13 +58,13 @@ vectors,count=model.vectors(['The cat sleeps on the sofa.','گربه روی مب
 score=lambda a,b:sum(x*y for x,y in zip(a,b))
 assert len(vectors[0])==384 and score(vectors[0],vectors[1])>score(vectors[0],vectors[2])+0.2
 """
-    subprocess.run([str(python), "-I", "-c", offline], cwd=workspace, env=env, check=True, timeout=90)
+    subprocess.run([str(python), "-I", "-X", "utf8", "-c", offline], cwd=workspace, env=env, check=True, timeout=90)
     token, nonce = secrets.token_hex(32), secrets.token_hex(24)
     ready = workspace / ("ready-" + nonce + ".json")
     env.update(LUNA_DESKTOP_NONCE=nonce, HERMES_DASHBOARD_SESSION_TOKEN=token, HERMES_DESKTOP_READY_FILE=str(ready))
     logs = workspace / "dashboard.log"
     with logs.open("wb") as output:
-        process = subprocess.Popen([str(python), "-I", "-m", "luna_cli.desktop"], cwd=workspace, env=env, stdin=subprocess.PIPE, stdout=output, stderr=subprocess.STDOUT)
+        process = subprocess.Popen([str(python), "-I", "-X", "utf8", "-m", "luna_cli.desktop"], cwd=workspace, env=env, stdin=subprocess.PIPE, stdout=output, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 120
             while not ready.exists():

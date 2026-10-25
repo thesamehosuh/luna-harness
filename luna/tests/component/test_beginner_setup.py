@@ -14,7 +14,7 @@ def setup_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setenv("LUNA_HOME", str(tmp_path))
     source = Path(__file__).resolve().parents[3]
-    (tmp_path / "config.yaml").write_text((source / "luna/config/config.yaml.luna").read_text())
+    (tmp_path / "config.yaml").write_text((source / "luna/config/config.yaml.luna").read_text(encoding="utf-8"), encoding="utf-8")
     from hermes_cli.product_runtime import seed_home
     seed_home(tmp_path)
     return tmp_path

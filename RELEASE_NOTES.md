@@ -9,7 +9,7 @@ this release and opens Setup inside the app. No Git, Python, Node or terminal is
 
 - **Linux x64/ARM64:** AppImage, Debian and RPM packages. For AppImage, enable “Allow executing
   as a program” in the file's Properties if your desktop requires it.
-- **macOS Intel/Apple Silicon:** unsigned DMG preview. Publisher signing/notarization is pending;
+- **macOS 14+ Intel/Apple Silicon:** unsigned DMG preview. Publisher signing/notarization is pending;
   this is not yet a frictionless beginner installation on macOS.
 - **Windows x64:** unsigned installer preview. Windows remains preview while clean-machine
   Docker/restart and full chat acceptance are completed. Windows ARM is not supported.

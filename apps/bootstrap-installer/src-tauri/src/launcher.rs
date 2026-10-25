@@ -161,6 +161,7 @@ fn command(program: &Path, home: &Path) -> Command {
     cmd.env("HERMES_HOME", home).env("LUNA_HOME", home)
         .env("UV_PYTHON_INSTALL_DIR", home.join("runtime/python"))
         .env("UV_CACHE_DIR", home.join("cache/uv"))
+        .env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8")
         .env_remove("PYTHONHOME").env_remove("PYTHONPATH").env_remove("VIRTUAL_ENV")
         .kill_on_drop(true);
     #[cfg(windows)] { cmd.creation_flags(0x08000000); }
@@ -510,6 +511,12 @@ mod tests {
     }
     impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 
+    #[test]
+    fn managed_python_children_use_utf8_on_every_platform() {
+        let cmd = command(Path::new("python"), Path::new("home"));
+        let vars: std::collections::HashMap<_, _> = cmd.as_std().get_envs().collect();
+        assert_eq!(vars.get(std::ffi::OsStr::new("PYTHONUTF8")), Some(&Some(std::ffi::OsStr::new("1"))));
+    }
     #[test]
     fn a_legacy_home_is_preserved_and_a_clean_sibling_is_chosen() {
         let temp = Scratch::new(); let base = temp.0.join(".luna"); fs::create_dir(&base).unwrap();
