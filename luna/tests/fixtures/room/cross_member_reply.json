@@ -1,0 +1,21 @@
+{
+  "chat_id": "-1000000000000",
+  "note": "Synthetic replay fixture: an A→B→C cross-member reply chain. Real captures are anonymized locally and never committed.",
+  "identity": {
+    "u_alex": {"peer_id": "alex", "display_name": "Alex"},
+    "u_babi": {"peer_id": "babi", "display_name": "Babi"},
+    "u_dia": {"peer_id": "dia", "display_name": "Dia"}
+  },
+  "messages": [
+    {"message_id": "101", "user_id": "u_alex", "user_name": "Alex",
+     "content": "anyone up for pizza later?", "timestamp": "2026-01-01T12:00:00+00:00",
+     "reply_to_message_id": null},
+    {"message_id": "104", "user_id": "u_babi", "user_name": "Babi",
+     "content": "always", "timestamp": "2026-01-01T12:05:00+00:00",
+     "reply_to_message_id": "101"},
+    {"message_id": "107", "user_id": "u_dia", "user_name": "Dia",
+     "content": "count me in, that place near the station?", "timestamp": "2026-01-01T12:09:00+00:00",
+     "reply_to_message_id": "104"}
+  ],
+  "current_message_id": "107"
+}

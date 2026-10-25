@@ -1,0 +1,11 @@
+{
+  "character": {"title": "Sky", "aliases": ["Skye"]},
+  "substantive": [
+    {"text": "Can someone explain this?", "expected": true},
+    {"text": "こんにちは", "expected": true},
+    {"text": "...", "expected": false},
+    {"text": "https://example.invalid/path", "expected": false},
+    {"text": "👍", "expected": false}
+  ],
+  "emergency_guard": {"max_per_hour": 12, "expected_after_12": false, "expected_next_hour": true}
+}

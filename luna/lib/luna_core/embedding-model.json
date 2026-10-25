@@ -1,0 +1,17 @@
+{
+  "id": "luna-multilingual-minilm-v1",
+  "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "model_revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+  "export": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+  "revision": "2c4055b12046f11709e9df2c122e59ffbdc2f900",
+  "license": "Apache-2.0",
+  "dimensions": 384,
+  "sequence_tokens": 128,
+  "max_document_tokens": 8192,
+  "pooling": "attention-mask mean, token-weighted chunks, L2 normalization",
+  "prefix": "",
+  "files": {
+    "model.onnx": {"path": "onnx/model_quantized.onnx", "sha256": "66fc00f5f29afcaff34092e1bdd20008ca3918265a82fb9695a551e510cc4ebc", "bytes": 118308126},
+    "tokenizer.json": {"path": "tokenizer.json", "sha256": "b60b6b43406a48bf3638526314f3d232d97058bc93472ff2de930d43686fa441", "bytes": 17082913}
+  }
+}

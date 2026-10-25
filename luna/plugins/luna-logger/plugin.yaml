@@ -1,0 +1,7 @@
+name: luna-logger
+version: 0.1.0
+description: "Tokenless indexer. Tails the gateway's shared observe transcript in state.db (read-only) into the derived luna-state.db: messages, identity registry, reply map. Never talks to Telegram; there is no second bot token."
+author: "Luna"
+kind: backend
+hooks:
+  - pre_gateway_dispatch

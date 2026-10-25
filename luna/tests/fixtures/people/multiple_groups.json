@@ -1,0 +1,11 @@
+{
+  "note": "Synthetic: one transport identity has different local roles in two rooms and a private DM.",
+  "platform": "telegram",
+  "user_id": "u_shared",
+  "display_name": "Alex",
+  "rooms": [
+    {"chat_id": "room-a", "alias": "Gardener", "role": "plant club member"},
+    {"chat_id": "room-b", "alias": "Captain", "role": "game night host"}
+  ],
+  "dm": {"chat_id": "dm-shared", "role": "private DM role"}
+}

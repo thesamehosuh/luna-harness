@@ -1,0 +1,8 @@
+[Unit]
+Description=Prune Luna local indexes and processed Honcho source data
+
+[Service]
+Type=oneshot
+UMask=0077
+EnvironmentFile=-@HERMES_HOME@/.env
+ExecStart=@HERMES_HOME@/venv/bin/python @REPO_ROOT@/luna/tools/prune_data.py --home @HERMES_HOME@

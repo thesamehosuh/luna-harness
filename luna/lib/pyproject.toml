@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "luna-core"
+version = "0.1.0a1"
+description = "Shared library + CLI entry point for the Luna harness overlay."
+requires-python = ">=3.11"
+
+[project.scripts]
+# `luna <cmd>` runs the hermes CLI bound to the Luna home and branded as Luna.
+luna = "luna_cli.main:main"
+
+[tool.setuptools]
+packages = ["luna_core", "luna_cli"]
+
+[tool.setuptools.package-data]
+luna_core = ["*.json", "*_NOTICES.txt", "embedding-LICENSE.txt"]

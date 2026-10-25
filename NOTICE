@@ -1,0 +1,37 @@
+Luna
+Copyright (c) 2026 thesamehosuh and Luna contributors
+
+This product includes software developed by Nous Research ("the engine"):
+hermes-agent, Copyright (c) 2025 Nous Research, MIT License.
+Upstream: https://github.com/NousResearch/hermes-agent
+Vendored version: 0.21.3 (commit 59f9ff8dbc75b9c4f07ae10174df730f7882a505)
+
+The engine remains under the MIT License; the full license text is in LICENSE
+(which is the MIT license of Nous Research and applies to the engine portions).
+Luna product code (the luna/ overlay, dashboard extensions, persona, deploy, and
+docs) is also released under the MIT License, except the native OpenCode
+integration modules identified below.
+
+The native OpenCode integration (luna/lib/luna_core/opencode_*.py) adapts
+Xratu's Apache-2.0 integration patterns, including inherited MIT portions from
+T3 Code. Its source/modified-file attribution and full license texts are in
+luna/lib/luna_core/OPENCODE_NOTICES.txt. The OpenCode executable (MIT) is an
+optional, separately downloaded runtime; it is not bundled with Luna.
+
+Attribution requirement: when you distribute this product or a derivative, keep
+this NOTICE and the LICENSE file with it.
+
+Bundled multilingual embedding assets
+------------------------------------
+Release bundles include sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,
+with a pinned generic int8 ONNX conversion from
+Xenova/paraphrase-multilingual-MiniLM-L12-v2 (Apache License 2.0).
+Model contributors retain their copyrights. The complete license, notice,
+upstream/export revisions and checksums ship in luna/assets/embeddings/.
+Luna adds token-weighted chunk pooling and normalized vectors at inference;
+the pinned exported weight files are distributed unchanged.
+
+Luna's bundled Manrope, DM Serif Display and JetBrains Mono typefaces use the
+SIL Open Font License 1.1. Full copyright/license notices accompany their files
+under web/public/fonts-luna/ and web/public/fonts-terminal/, and are included in
+the native launcher's compiled licenses/ resources.

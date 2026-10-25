@@ -1,0 +1,5 @@
+/* One Luna surface system: tokens, fonts, focus, inputs and reduced motion. */
+@import '../../../web/src/index.css';
+@source './**/*.{ts,tsx}';
+
+.launcher-display { font-family: var(--theme-font-display); }

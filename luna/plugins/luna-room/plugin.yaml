@@ -1,0 +1,9 @@
+name: luna-room
+version: 0.1.0
+description: "Roster + cross-session reply-chain reconstruction. On a triggered group turn it stages a bounded room/identity block via the ephemeral sidecar (cache-safe), and enforces the group output-shaping hard limits. Never infers identity from text."
+author: "Luna"
+kind: backend
+hooks:
+  - pre_llm_call
+  - pre_gateway_dispatch
+  - transform_llm_output

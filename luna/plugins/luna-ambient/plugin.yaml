@@ -1,0 +1,8 @@
+name: luna-ambient
+version: 0.1.0
+description: "Conservative self-wake cascade. Reads the derived index, asks jev (OpenCode Zen systemone) whether Luna should speak, and — only on a high-confidence, well-timed, in-budget decision — wakes her into the shared room session. Dry-run by default."
+author: "Luna"
+kind: backend
+hooks:
+  - pre_gateway_dispatch
+  - post_llm_call

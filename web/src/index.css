@@ -1,0 +1,418 @@
+@import 'tailwindcss';
+@import '@nous-research/ui/styles/globals.css';
+
+/* Scan the published design-system bundle so its utility classes survive
+   Tailwind's JIT purge. */
+@source '../node_modules/@nous-research/ui/dist';
+
+/* ------------------------------------------------------------------ */
+/* JetBrains Mono — bundled for the embedded TUI (/chat tab).          */
+/* Gives the terminal a proper monospace font even on systems where    */
+/* the user doesn't have one installed locally; xterm.js picks it up   */
+/* via ChatPage's `fontFamily` option.                                 */
+/* SIL Open Font License 1.1; notice bundled beside the font files.    */
+/* ------------------------------------------------------------------ */
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../public/fonts-terminal/JetBrainsMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../public/fonts-terminal/JetBrainsMono-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../public/fonts-terminal/JetBrainsMono-Italic.woff2') format('woff2');
+}
+
+/* Locally bundled OFL typefaces: no external font request on the default themes. */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('../public/fonts-luna/Manrope-Variable.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'DM Serif Display';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../public/fonts-luna/DMSerifDisplay-Regular.ttf') format('truetype');
+}
+
+/* Sakura Dusk is also the first-paint palette, before preferences load. */
+:root {
+  color-scheme: dark;
+  --foreground: transparent;
+  --foreground-base: #ffffff;
+  --foreground-alpha: 0;
+  --midground: #f6eefa;
+  --midground-base: #f6eefa;
+  --midground-alpha: 1;
+  --background: #17132b;
+  --background-base: #17132b;
+  --background-alpha: 1;
+  --theme-font-sans: 'Manrope', system-ui, sans-serif;
+  --theme-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --theme-font-display: 'DM Serif Display', Georgia, serif;
+  --theme-base-size: 15px;
+  --theme-line-height: 1.6;
+  --theme-letter-spacing: -0.005em;
+  /* Vendor internals inherit the new fonts too. No pixel/display face on controls. */
+  --font-rules-compressed: var(--theme-font-sans);
+  --font-rules-expanded: var(--theme-font-sans);
+  --font-mondwest: var(--theme-font-sans);
+  --radius: 0.75rem;
+  --theme-radius: 0.75rem;
+  --theme-spacing-mul: 1;
+  --theme-density: comfortable;
+  --series-input-token: #eeafce;
+  --series-output-token: #b8a8dd;
+  --text-primary: var(--midground);
+  --text-secondary: color-mix(in srgb, var(--midground-base) 80%, var(--background-base));
+  --text-tertiary: color-mix(in srgb, var(--midground-base) 68%, var(--background-base));
+}
+
+/* Theme tokens cascade into the document root so every descendant inherits
+   the font stack, base size, and letter spacing without explicit calls. */
+html {
+  font-family: var(--theme-font-sans);
+  font-size: var(--theme-base-size);
+  line-height: var(--theme-line-height);
+  letter-spacing: var(--theme-letter-spacing);
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--theme-font-sans);
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+code, kbd, pre, samp, .font-mono, .font-mono-ui {
+  font-family: var(--theme-font-mono);
+}
+
+/* Density: scale the shadcn spacing utilities via a multiplier. The DS
+   components use `p-N` / `gap-N` / `space-*` classes which resolve against
+   Tailwind's spacing scale; multiplying `--spacing` at :root scales them
+   all proportionally in Tailwind v4. */
+@theme inline {
+  --spacing: calc(0.25rem * var(--theme-spacing-mul, 1));
+  --font-sans: var(--theme-font-sans);
+  --font-mono: var(--theme-font-mono);
+  --font-display: var(--theme-font-display);
+}
+
+#root {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+small { font-size: 0.875rem; }
+code { font-size: 0.875rem; }
+
+/* Semantic surface tokens.
+   The dashboard's page code predates the Nous DS and uses shadcn-style
+   utility classes (bg-card, text-muted-foreground, border-border, etc.)
+   extensively. Rather than rewrite every call site, we expose those
+   tokens on top of the Nous palette so classes continue to resolve. */
+@theme {
+  /* Text is separate from the blossom accent; foreground remains legible. */
+  --color-foreground: var(--midground);
+
+  --color-card: color-mix(in srgb, var(--midground-base) 4%, var(--background-base));
+  --color-card-foreground: var(--midground);
+  --color-primary: var(--midground);
+  --color-primary-foreground: var(--background-base);
+  --color-secondary: color-mix(in srgb, var(--midground-base) 6%, var(--background-base));
+  --color-secondary-foreground: var(--midground);
+  --color-muted: color-mix(in srgb, var(--midground-base) 8%, var(--background-base));
+  /* Routes the shadcn `muted-foreground` slot through the DS semantic
+     text-secondary token (defaults to midground 80%) so legacy call
+     sites that use `text-muted-foreground` get a readable color
+     instead of the old 55%-transparent default. */
+  --color-muted-foreground: var(--text-secondary);
+  --color-accent: color-mix(in srgb, var(--midground-base) 10%, var(--background-base));
+  --color-accent-foreground: var(--midground);
+  --color-destructive: #ff9cab;
+  --color-destructive-foreground: #17132b;
+  --color-success: #8ad9a5;
+  --color-warning: #f3d6ab;
+  --color-border: color-mix(in srgb, var(--midground-base) 15%, transparent);
+  --color-input: color-mix(in srgb, var(--midground-base) 15%, transparent);
+  --color-ring: var(--midground);
+  --color-popover: var(--color-card);
+  --color-popover-foreground: var(--midground);
+
+  --radius-sm: calc(var(--theme-radius) - 4px);
+  --radius-md: calc(var(--theme-radius) - 2px);
+  --radius-lg: var(--theme-radius);
+  --radius-xl: calc(var(--theme-radius) + 4px);
+  --radius-control: var(--theme-radius);
+  --radius-panel: calc(var(--theme-radius) * 1.5);
+}
+
+/* Native controls and remaining vendor widgets share the selected theme's shape.
+   Utilities can still give chips, avatars and terminal surfaces their own geometry. */
+@layer base {
+  button,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    border-radius: var(--radius-control);
+  }
+  [role="listbox"], [role="menu"], [data-slot="dialog-content"], [role="alertdialog"] {
+    border-radius: var(--radius-panel);
+  }
+}
+
+/* Vendor popovers/segmented controls have no radius props. Keep their accessible
+   behavior and apply Luna's surface tokens at their semantic boundaries. */
+button[role="combobox"] {
+  border-radius: var(--radius-control);
+  font-family: var(--theme-font-sans);
+}
+button[role="switch"], button[role="switch"] > span {
+  border-radius: var(--radius-control);
+}
+button[role="switch"][aria-checked="true"] {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--background-base));
+}
+button[role="switch"][aria-checked="true"] > span {
+  background: var(--color-primary);
+}
+button[role="checkbox"] {
+  border-radius: min(4px, var(--radius-control));
+}
+[role="radiogroup"]:has(> button[role="radio"]) {
+  border-radius: var(--radius-control);
+  padding: 3px;
+  gap: 3px;
+}
+[role="radiogroup"] > button[role="radio"] {
+  border-right: 0;
+  border-radius: max(0px, calc(var(--radius-control) - 3px));
+}
+[role="radiogroup"] > button[role="radio"][aria-checked="true"] {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+[role="status"].fixed.border {
+  border-radius: var(--radius-control);
+  font-family: var(--theme-font-sans);
+  text-transform: none;
+  letter-spacing: normal;
+}
+[role="alertdialog"] h2, [data-slot="dialog-title"] {
+  font-family: var(--theme-font-display);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/* Applied only until ThemeProvider takes ownership; custom themes keep derived fallbacks. */
+:root:not([data-dashboard-theme]) {
+  --color-primary: #eeafce;
+  --color-card: #211b36;
+  --color-ring: #b8a8dd;
+}
+
+
+/* Collapsed sidebar tooltip entrance — skipped when moving between items. */
+@keyframes sidebar-tooltip-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+/* Toast animations used by `components/Toast.tsx`. */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(16px); }
+}
+
+/* Generic fade + dialog entrance used by popovers and confirm dialogs. */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Hide scrollbar utility — used by the header's overflow-x nav row. */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* System UI-monospace stack — distinct from `font-courier` (Courier
+   Prime), used for dense data readouts where the display font would
+   break the grid. Routes through the theme's mono stack so themes
+   with a different monospace (JetBrains Mono, IBM Plex Mono, etc.)
+   still apply here. */
+.font-mono-ui {
+  font-family: var(--theme-font-mono);
+}
+
+/* Subtle grain overlay for badges. */
+.grain {
+  position: relative;
+}
+.grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  pointer-events: none;
+  background: repeating-conic-gradient(currentColor 0% 25%, #0000 0% 50%) 0 0 /
+    2px 2px;
+}
+
+/* RTL support — Arabic and any future right-to-left locale. The i18n provider
+   sets `dir` on <html>; Tailwind v4's logical spacing utilities (ms-/me-,
+   ps-/pe-) and logical properties then flip automatically. Scoped so the
+   default LTR layout is untouched. */
+html[dir="rtl"] {
+  direction: rtl;
+}
+
+/* A coherent Luna shell shared by every route. Custom palettes and font choices still cascade. */
+.luna-shell {
+  background-image: radial-gradient(ellipse at 80% 0%, color-mix(in srgb, var(--color-primary) 7%, transparent), transparent 48%);
+}
+.luna-sidebar {
+  background: color-mix(in srgb, var(--color-card) 60%, var(--background-base));
+}
+.luna-wordmark {
+  font-family: var(--theme-font-display);
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.luna-nav-link[aria-current="page"] {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.luna-nav-link:hover {
+  background: color-mix(in srgb, var(--midground-base) 6%, transparent);
+}
+.luna-nav-link[aria-current="page"]::after {
+  content: '';
+  height: 5px;
+  width: 5px;
+  border-radius: 50%;
+  margin-inline-start: auto;
+  background: var(--color-primary);
+}
+.luna-page-title {
+  font-family: var(--theme-font-display);
+  font-size: clamp(1.8rem, 2.3vw, 2.5rem);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+.luna-page-content {
+  width: 100%;
+  max-width: 1360px;
+  margin-inline: auto;
+}
+.luna-skip-link {
+  position: fixed;
+  inset-block-start: 8px;
+  inset-inline-start: 16px;
+  z-index: 400;
+  transform: translateY(-200%);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+.luna-skip-link:focus { transform: translateY(0); }
+
+/* Remaining vendor menus inherit readable, sentence-case chrome. */
+.text-display {
+  text-transform: none;
+  letter-spacing: normal;
+}
+.font-courier { font-family: var(--theme-font-mono); }
+button.font-courier, button.font-mondwest {
+  font-family: var(--theme-font-sans);
+  text-transform: none;
+  letter-spacing: normal;
+}
+button.text-display {
+  font-family: var(--theme-font-sans);
+  letter-spacing: normal;
+  line-height: 1.4;
+  border-radius: var(--radius-control);
+  box-shadow: none;
+  font-weight: 500;
+}
+button.text-display > .arc-border { display: none; }
+button.text-display.bg-midground {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+button.text-display.shadow-midground { border: 1px solid var(--color-border); }
+button.text-display:active { filter: none; }
+button.text-display:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+:where(input, textarea, select) {
+  accent-color: var(--color-primary);
+}
+:where(input[type="checkbox"], input[type="radio"], input[type="range"]) { accent-color: var(--color-primary); }
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) {
+  border-color: var(--color-input);
+  border-radius: var(--radius-control);
+}
+:where(input, textarea, select):focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+:where(button, a, input, textarea, select) { -webkit-tap-highlight-color: transparent; }
+:where(textarea) { line-height: 1.7; }
+:where(h2, h3) { text-wrap: balance; }
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  color: var(--midground);
+}
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--midground-base) 20%, transparent) transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

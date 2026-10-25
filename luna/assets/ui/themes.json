@@ -1,0 +1,71 @@
+{
+  "sakura-dusk": {
+    "background": "#17132b",
+    "foreground": "#f6eefa",
+    "colorScheme": "dark",
+    "colors": {
+      "card": "#211b36",
+      "cardForeground": "#f6eefa",
+      "popover": "#211b36",
+      "popoverForeground": "#f6eefa",
+      "primary": "#eeafce",
+      "primaryForeground": "#17132b",
+      "secondary": "#2b2442",
+      "secondaryForeground": "#f6eefa",
+      "muted": "#25203a",
+      "mutedForeground": "#d6c9e5",
+      "accent": "#342a4b",
+      "accentForeground": "#f6eefa",
+      "destructive": "#ff9cab",
+      "destructiveForeground": "#17132b",
+      "success": "#8ad9a5",
+      "warning": "#f3d6ab",
+      "border": "#514365",
+      "input": "#514365",
+      "ring": "#b8a8dd"
+    }
+  },
+  "sakura-day": {
+    "background": "#fbf0f8",
+    "foreground": "#1e1830",
+    "colorScheme": "light",
+    "colors": {
+      "card": "#fffafd",
+      "cardForeground": "#1e1830",
+      "popover": "#fffafd",
+      "popoverForeground": "#1e1830",
+      "primary": "#a65370",
+      "primaryForeground": "#ffffff",
+      "secondary": "#f1e3ee",
+      "secondaryForeground": "#1e1830",
+      "muted": "#f2e9f2",
+      "mutedForeground": "#5b5068",
+      "accent": "#f4e1ed",
+      "accentForeground": "#1e1830",
+      "destructive": "#a8324b",
+      "destructiveForeground": "#ffffff",
+      "success": "#28704a",
+      "warning": "#785019",
+      "border": "#cbbbd0",
+      "input": "#cbbbd0",
+      "ring": "#8c5b8f"
+    }
+  },
+  "mono": {
+    "background": "#0e0e0e",
+    "foreground": "#eaeaea",
+    "colorScheme": "dark",
+    "colors": {
+      "primary": "#eaeaea",
+      "primaryForeground": "#0e0e0e",
+      "card": "#141414",
+      "muted": "#1e1e1e",
+      "mutedForeground": "#a0a0a0",
+      "border": "#505050",
+      "ring": "#9a9a9a",
+      "destructive": "#f09a9a",
+      "success": "#a0d5ad",
+      "warning": "#e8d39f"
+    }
+  }
+}

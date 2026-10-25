@@ -1,0 +1,35 @@
+# Luna harness — plugin sets (reference copy).
+#
+# The authoritative config is `luna/config/config.yaml.luna` (the `plugins:` block). This file is a
+# quick reference for reviewers and for `install.sh` sanity checks.
+#
+# Enabled (Luna overlay + minimal upstream):
+#   - telegram-platform      single bot token; sole getUpdates consumer
+#   - web-searxng, web-ddgs  web search
+#   - security-guidance      safety guidance
+#   - disk-cleanup           housekeeping
+#   - spotify, google_meet   owner conveniences
+#   - luna-room              roster + reply-chain; ephemeral sidecar injection
+#   - luna-memory            per-identity tiered Honcho provider (replaces `honcho`)
+#   - luna-ambient           jev self-wake cascade + proactive wake
+#   - luna-logger            tokenless indexer (tails the observe transcript)
+#
+# Disabled: every non-telegram platform and every non-Luna memory provider (see config.yaml.luna).
+
+enabled:
+  - telegram-platform
+  - web-searxng
+  - web-ddgs
+  - security-guidance
+  - disk-cleanup
+  - spotify
+  - google_meet
+  - luna-room
+  - luna-memory
+  - luna-ambient
+  - luna-logger
+
+# Required for proactive wakes (ctx.inject_message into the shared room session).
+entries:
+  luna-ambient:
+    allow_gateway_injection: true

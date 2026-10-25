@@ -1,0 +1,37 @@
+{
+  "version": "2.1.2",
+  "targets": {
+    "linux-x64-baseline": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-linux-x64-baseline/-/cli-linux-x64-baseline-2.1.2.tgz",
+      "integrity": "sha512-rVKKaBzDun4euQH0/T752DWXJ6o0b/u11BncTTYSGBgekVzpK36GJjBjKHegtzqU5TLdATG40uSQxnKaKKstwA=="
+    },
+    "linux-x64-baseline-musl": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-linux-x64-baseline-musl/-/cli-linux-x64-baseline-musl-2.1.2.tgz",
+      "integrity": "sha512-eFd/R56TZU54a8X479kc2BK1MD6Ptn9rQzVFzQO1LcVJ4m9FGIVW2Hn2aFy1+ttYyugNdmsNfTP5JtK1KkS5mQ=="
+    },
+    "linux-arm64": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-linux-arm64/-/cli-linux-arm64-2.1.2.tgz",
+      "integrity": "sha512-294IA9S1sXOAzOBRPMcnFuYpXlFeUaKTlpTk0a7TMvuc7cJbfS52poTw3AlIu7ycbn8TGmTmj27OOxsMmBCLEg=="
+    },
+    "linux-arm64-musl": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-linux-arm64-musl/-/cli-linux-arm64-musl-2.1.2.tgz",
+      "integrity": "sha512-A9s3rj+Kb1RNRSzYRUxaXshudRliZbnNfg5+VfKUnVGASe2fbTGmQcwAxPsGFeTYt1Qinz5mOhEtHBXl5vh7lg=="
+    },
+    "darwin-x64-baseline": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-darwin-x64-baseline/-/cli-darwin-x64-baseline-2.1.2.tgz",
+      "integrity": "sha512-s3gu8lFo7/pEC+GP5QBvVXeqMj5ZwhraG5vL3Han2DV9v30/m6hjIgejS75wdb/Y5p0SWgrDOJM/ZAHb8vCj6A=="
+    },
+    "darwin-arm64": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-darwin-arm64/-/cli-darwin-arm64-2.1.2.tgz",
+      "integrity": "sha512-H8Nx7ksbHpd5u0Q9BQMj2Mt5vs+dC/t3AslxrmJDY5TZbPyHt6OKJ5TMJc6nQZAFKPrVFGOA+TdzQ9tU5qt6Sg=="
+    },
+    "windows-x64-baseline": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-windows-x64-baseline/-/cli-windows-x64-baseline-2.1.2.tgz",
+      "integrity": "sha512-TcrUfc1GcjeNtaCFebhCS8+zWhPqkuAhGEGQUkdlEy7Z1BwBHV6T4/c/IR54NRgUg45vA7zEIzGIghvUBHrnRQ=="
+    },
+    "windows-arm64": {
+      "tarball": "https://registry.npmjs.org/@opencode/cli-windows-arm64/-/cli-windows-arm64-2.1.2.tgz",
+      "integrity": "sha512-PWmp5UQ6sVNQaTiDXdQEw3sq2TumJDqs6cQsNZ9EW77mOzZcOcW7jVA+3u1bdkPDoYcmv+NfTLhOl3t+C6hPUQ=="
+    }
+  }
+}

@@ -1,0 +1,113 @@
+# Luna skin — Sakura Dusk and Day palette, Luna branding.
+#
+# Data-only: install.sh copies this to $HERMES_HOME/skins/luna.yaml and config.yaml sets
+# `display.skin: luna`. Missing keys inherit from the built-in `default` skin, so this only needs to
+# override the gold signature + branding. See the dashboard Help page's Appearance section.
+
+name: luna
+description: "Sakura — blossom pink and violet Luna"
+
+colors:
+  banner_border: "#514365"
+  banner_title: "#eeafce"
+  banner_accent: "#b8a8dd"
+  banner_dim: "#d6c9e5"
+  banner_text: "#f6eefa"
+  ui_accent: "#eeafce"
+  ui_label: "#b8a8dd"
+  ui_ok: "#8ad9a5"
+  ui_error: "#ff9cab"
+  ui_warn: "#f3d6ab"
+  prompt: "#f6eefa"
+  input_rule: "#514365"
+  response_border: "#eeafce"
+  status_bar_bg: "#211b36"
+  status_bar_text: "#d6c9e5"
+  status_bar_strong: "#eeafce"
+  status_bar_dim: "#d6c9e5"
+  status_bar_good: "#8ad9a5"
+  status_bar_warn: "#f3d6ab"
+  status_bar_bad: "#ff9cab"
+  status_bar_critical: "#ff9cab"
+  session_label: "#b8a8dd"
+  session_border: "#514365"
+  completion_menu_bg: "#211b36"
+  completion_menu_current_bg: "#342a4b"
+  selection_bg: "#342a4b"
+  shell_dollar: "#b8a8dd"
+  voice_status_bg: "#211b36"
+
+# Light overlay (merged onto `colors`) — darkened mauve for contrast on white.
+light_colors:
+  banner_title: "#a65370"
+  banner_accent: "#8c5b8f"
+  banner_dim: "#5b5068"
+  banner_text: "#1e1830"
+  ui_accent: "#a65370"
+  ui_label: "#8c5b8f"
+  ui_ok: "#28704a"
+  ui_error: "#a8324b"
+  ui_warn: "#785019"
+  prompt: "#1e1830"
+  response_border: "#a65370"
+  session_label: "#8c5b8f"
+  status_bar_text: "#5b5068"
+  status_bar_strong: "#a65370"
+  status_bar_dim: "#5b5068"
+  status_bar_good: "#28704a"
+  status_bar_warn: "#785019"
+  status_bar_bad: "#a8324b"
+  status_bar_critical: "#a8324b"
+  shell_dollar: "#8c5b8f"
+  completion_menu_bg: "#fffafd"
+  completion_menu_current_bg: "#f4e1ed"
+  selection_bg: "#f4e1ed"
+  status_bar_bg: "#fffafd"
+  voice_status_bg: "#fffafd"
+
+spinner:
+  waiting_faces: ["(☾)", "(✦)", "(·)", "(∴)", "(◌)"]
+  thinking_faces: ["(☾)", "(✦)", "(∴)", "(◌)", "(·)"]
+  thinking_verbs:
+    - moonlighting
+    - mulling it over
+    - sifting the room
+    - reading the vibe
+    - connecting dots
+    - letting it breathe
+    - drafting something small
+    - checking the thread
+  wings:
+    - ["⟪☾", "☾⟫"]
+    - ["⟪✦", "✦⟫"]
+    - ["⟪·", "·⟫"]
+
+branding:
+  agent_name: Luna
+  welcome: "Your companion is ready. Type your message or /help for commands."
+  goodbye: "Later. ☾"
+  response_label: " ☾ Companion "
+  prompt_symbol: "❯"
+  help_header: "☾ Available Commands"
+
+tool_prefix: "┊"
+
+banner_logo: |-
+  [bold #F2C6DD]██╗     ██╗   ██╗███╗   ██╗ █████╗ [/]
+  [bold #F2C6DD]██║     ██║   ██║████╗  ██║██╔══██╗[/]
+  [#DF8DA5]██║     ██║   ██║██╔██╗ ██║███████║[/]
+  [#DF8DA5]██║     ██║   ██║██║╚██╗██║██╔══██║[/]
+  [#B96A84]███████╗╚██████╔╝██║ ╚████║██║  ██║[/]
+  [#B96A84]╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝[/]
+
+banner_hero: |-
+  [#F2C6DD]⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀[/]
+  [#DF8DA5]⠀⠀⠀⠀⠀⢀⣴⣿⣿⡿⠿⠿⣿⣷⣄⠀⠀⠀⠀[/]
+  [#B96A84]⠀⠀⠀⠀⣰⣿⡿⠋⠀⠀⠀⠀⠙⢿⣷⡀⠀⠀[/]
+  [#B96A84]⠀⠀⠀⢰⣿⡟⠀⠀⠀⠀⠀⠀⠀⢻⣿⡇⠀[/]
+  [#84415D]⠀⠀⠀⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣇⠀[/]
+  [#84415D]⠀⠀⠀⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣇⠀[/]
+  [#B96A84]⠀⠀⠀⢿⣿⡀⠀⠀⠀⠀⠀⠀⢀⣿⣿⠀[/]
+  [#B96A84]⠀⠀⠀⠸⣿⣧⡀⠀⠀⠀⠀⢀⣾⣿⠃⠀[/]
+  [#DF8DA5]⠀⠀⠀⠀⠙⢿⣷⣦⣀⣀⣤⣾⡿⠋⠀⠀[/]
+  [#F2C6DD]⠀⠀⠀⠀⠀⠀⠉⠛⠛⠛⠉⠀⠀⠀⠀⠀[/]

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Native controls belong only to the bundled bootstrap page. Dashboard and external pages receive no native permissions.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:event:default"
+  ]
+}

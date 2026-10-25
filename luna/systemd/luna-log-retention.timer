@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Luna log retention
+
+[Timer]
+OnCalendar=*-*-* 00:15:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=luna-log-retention.service
+
+[Install]
+WantedBy=timers.target

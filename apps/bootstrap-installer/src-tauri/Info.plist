@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Luna uses audio capture when you enable voice conversations.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Luna uses the microphone when you enable voice input.</string>
+</dict>
+</plist>

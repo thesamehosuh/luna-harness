@@ -1,0 +1,7 @@
+[Unit]
+Description=Prune Luna local logs after the daily retention window
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=@HERMES_HOME@/venv/bin/python @REPO_ROOT@/luna/tools/prune_logs.py --home @HERMES_HOME@

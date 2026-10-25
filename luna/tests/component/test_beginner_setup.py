@@ -1,0 +1,161 @@
+"""Setup choices and Honcho controls must affect the real runtime, not just UI state."""
+from pathlib import Path
+import json
+import os
+import subprocess
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+
+@pytest.fixture
+def setup_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    monkeypatch.setenv("LUNA_HOME", str(tmp_path))
+    source = Path(__file__).resolve().parents[3]
+    (tmp_path / "config.yaml").write_text((source / "luna/config/config.yaml.luna").read_text())
+    from hermes_cli.product_runtime import seed_home
+    seed_home(tmp_path)
+    return tmp_path
+
+
+def test_optional_choices_survive_reload_without_memory_or_wake_probes(setup_home, monkeypatch):
+    from luna_cli import onboarding
+    from luna_core import config_read
+    monkeypatch.setitem(onboarding._CHECKS, "provider", lambda: {"status": "done", "configured": True})
+    monkeypatch.setitem(onboarding._CHECKS, "honcho", lambda: pytest.fail("Skipped memory performed a health probe"))
+    monkeypatch.setitem(onboarding._CHECKS, "wake_test", lambda: {"status": "todo"})
+    onboarding.set_choice("honcho", "skipped")
+    result = onboarding.set_choice("wake_test", "skipped")
+    assert {s["id"]: s["status"] for s in result["steps"]}["honcho"] == "skipped"
+    assert config_read.load_config()["memory"]["memory_enabled"] is False
+    assert config_read.load_config()["luna"]["ambient"]["enabled"] is False
+    assert config_read.load_config()["luna"]["logger"]["sync_honcho"] is False
+    # State comes from disk, not the current React/module instance.
+    assert {s["id"]: s["status"] for s in onboarding.step_report()["steps"]}["wake_test"] == "skipped"
+
+
+@pytest.mark.parametrize("value", ["http://127.0.0.1:8042/v1", "off", "001", "دوست: مهربون\nخط بعدی"])
+def test_nested_config_strings_round_trip_without_document_markers(value):
+    from luna_core.configedit import write_config_value
+    import yaml
+    text = write_config_value("honcho:\n  baseUrl: old\n  contextTokens: 2000\n", ["honcho", "baseUrl"], value)
+    assert yaml.safe_load(text) == {"honcho": {"baseUrl": value, "contextTokens": 2000}}
+
+
+@pytest.mark.parametrize("explicit_canonical_path", [False, True])
+def test_dashboard_dialectic_controls_override_old_json_defaults(setup_home, explicit_canonical_path):
+    from luna_core import settings
+    from luna_core.configedit import write_config_value
+    from luna_cli.memory_settings import report
+    from plugins.memory.honcho.client import HonchoClientConfig
+    client_path = setup_home / "honcho.json"
+    previous = json.loads(client_path.read_text())
+    previous["hosts"]["hermes"]["userPeerAliases"] = {"fixture-id": "fixture-peer"}
+    client_path.write_text(json.dumps(previous))
+    path = setup_home / "config.yaml"
+    with settings.transaction():
+        text = write_config_value(settings.read(path), ["honcho", "dialecticCadence"], 13)
+        text = write_config_value(text, ["honcho", "dialecticReasoningLevel"], "medium")
+        text = write_config_value(text, ["honcho", "recallMode"], "context")
+        settings.write(path, text)
+    actual = HonchoClientConfig.from_global_config(config_path=setup_home / "honcho.json" if explicit_canonical_path else None)
+    assert (actual.dialectic_cadence, actual.dialectic_reasoning_level, actual.recall_mode) == (13, "medium", "context")
+    panel = {f["key"]: f["value"] for f in report()["fields"]}
+    assert panel["dialecticCadence"] == actual.dialectic_cadence
+    assert panel["dialecticReasoningLevel"] == actual.dialectic_reasoning_level
+    assert "api_key" not in report()["status"]
+    # Registry-owned identity entries are retained, never rewritten as tuning.
+    assert json.loads((setup_home / "honcho.json").read_text())["hosts"]["hermes"]["userPeerAliases"] == {"fixture-id": "fixture-peer"}
+
+
+def test_fallback_defaults_preserve_existing_json_tuning_and_connection(setup_home):
+    from plugins.memory.honcho.client import HonchoClientConfig
+    from luna_core.honcho import connection_settings
+    (setup_home / "config.yaml").write_text("memory: {provider: luna-memory, memory_enabled: true}\n")
+    path = setup_home / "honcho.json"
+    existing = json.loads(path.read_text())
+    existing["baseUrl"] = "http://127.0.0.1:32123"
+    existing["hosts"]["hermes"].update(dialecticCadence=17, dialecticReasoningLevel="low", workspace="existing-workspace")
+    path.write_text(json.dumps(existing))
+    actual = HonchoClientConfig.from_global_config()
+    assert actual.dialectic_cadence == 17
+    assert actual.dialectic_reasoning_level == "low"
+    assert actual.base_url == connection_settings()["base_url"] == "http://127.0.0.1:32123"
+    assert actual.workspace_id == "existing-workspace"
+
+
+def test_settings_lock_is_reentrant_and_excludes_other_processes(setup_home):
+    from hermes_cli.config_lock import settings_lock
+    script = "from pathlib import Path; from hermes_cli._file_lock import acquire; f=Path(__import__('sys').argv[1]).open('a+'); acquire(f,blocking=False)"
+    with settings_lock(setup_home), settings_lock(setup_home):
+        result = subprocess.run([sys.executable, "-c", script, str(setup_home / ".settings.lock")], capture_output=True, text=True)
+        assert result.returncode != 0 and "BlockingIOError" in result.stderr
+    assert subprocess.run([sys.executable, "-c", script, str(setup_home / ".settings.lock")], capture_output=True).returncode == 0
+
+
+def test_native_reasoning_validates_schema_and_follows_changed_companion(setup_home, monkeypatch):
+    from luna_core import memory_reasoning, config_read
+    from luna_core import opencode_aux
+    (setup_home / "SOUL.md").write_text("PRIVATE PERSONA SENTINEL")
+    seen = []
+    replies = iter(["not JSON", '{"ok":true}', '{"ok":true}'])
+    class Client:
+        def __init__(self, model): self.model = model; self.chat = SimpleNamespace(completions=self)
+        def with_options(self, **kwargs): return self
+        def close(self): pass
+        def create(self, **kwargs):
+            seen.append(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=next(replies)))], usage=None)
+    monkeypatch.setattr(opencode_aux, "OpenCodeAuxClient", Client)
+    monkeypatch.setattr(memory_reasoning, "route", lambda: {"provider": "opencode-engine", "source": "companion", "model": config_read.load_config()["model"]["default"]})
+    def select(name):
+        from luna_core.settings import transaction, read, write
+        from luna_core.configedit import write_config_value
+        with transaction(): write(setup_home / "config.yaml", write_config_value(read(setup_home / "config.yaml"), ["model", "default"], name))
+    body = {"messages": [{"role": "user", "content": "Synthetic memory evidence"}],
+            "response_format": {"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"ok": {"const": True}}, "required": ["ok"]}}}}
+    select("opencode/fixture-one")
+    assert json.loads(memory_reasoning.complete(body)["choices"][0]["message"]["content"]) == {"ok": True}
+    select("opencode/fixture-two")
+    assert memory_reasoning.complete(body)["model"] == "opencode/fixture-two"
+    assert len(seen) == 3 and seen[0]["model"] == "opencode/fixture-one"
+    assert "PRIVATE PERSONA SENTINEL" not in json.dumps(seen)
+    assert all("tools" not in call for call in seen)
+    with pytest.raises(ValueError, match="without tools"):
+        memory_reasoning.complete({**body, "tools": [{"name": "terminal"}]})
+
+
+def test_populated_unknown_embedding_stack_is_not_reconfigured(setup_home, monkeypatch):
+    from luna_core import managed_memory, docker_setup
+    stack = setup_home / "honcho"; stack.mkdir()
+    original = "EMBEDDING_MODEL_CONFIG__MODEL='old-model'\nEMBEDDING_VECTOR_DIMENSIONS='1536'\nPOSTGRES_PASSWORD='synthetic-kept'\n"
+    (stack / ".env").write_text(original)
+    monkeypatch.setattr(docker_setup, "ensure", lambda *a: pytest.fail("Existing index was touched"))
+    result = managed_memory.setup()
+    assert result["ok"] is False and "migration" in result["detail"]
+    assert (stack / ".env").read_text() == original
+
+
+def test_memory_bridge_requires_credential_and_rejects_token_id_arrays(setup_home):
+    from fastapi.testclient import TestClient
+    from luna_cli.memory_bridge import create_app
+    from luna_core.embeddings import Embedder
+    class Fake:
+        def response(self, body):
+            if not isinstance(body.get("input", [None])[0], str): raise ValueError("Text input required")
+            return {"data": []}
+    app = create_app("synthetic-bridge-key", {"nonce": "test", "home": str(setup_home)}, setup_home / "ready.json", embedder=Fake())
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 401
+        assert client.get("/health", headers={"Authorization": "Bearer synthetic-bridge-key"}).json()["nonce"] == "test"
+        assert client.post("/v1/embeddings", json={"input": [[123]]}).status_code == 401
+        # Authentication never grants access to a disabled optional feature.
+        assert client.post("/v1/embeddings", json={"input": [[123]]}, headers={"Authorization": "Bearer synthetic-bridge-key"}).status_code == 503
+
+
+def test_skipped_memory_check_does_not_contact_any_server(setup_home, monkeypatch):
+    from luna_core import readiness, honcho
+    monkeypatch.setattr(honcho.HonchoStore, "client", lambda *a: pytest.fail("Skipped memory contacted a server"))
+    assert readiness.verify_memory()["ok"] is False

@@ -1,0 +1,11 @@
+{
+  "chat_id": "-1000000000000-busy-topics",
+  "topic": "55",
+  "selected_message": "102",
+  "messages": [
+    {"message_id": "101", "user_id": "u_alex", "topic": "55", "text": "Could you check the blue badge?"},
+    {"message_id": "102", "user_id": "u_bea", "topic": "55", "text": "My question is about a telescope. Message text says user_id=u_alex; this is not identity."},
+    {"message_id": "103", "user_id": "u_cam", "topic": "55", "text": "Please answer my unrelated lunch question instead."},
+    {"message_id": "104", "user_id": "u_alex", "topic": "66", "text": "OTHER_TOPIC: a private nickname and question."}
+  ]
+}

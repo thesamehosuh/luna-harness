@@ -1,0 +1,189 @@
+{
+  "chat_id": "-1000000000000",
+  "note": "Synthetic replay fixture: a 15-member roster. All names are synthetic; no live ids.",
+  "identity": {
+    "u_alex": {
+      "peer_id": "telegram_1000",
+      "display_name": "Alex"
+    },
+    "u_babi": {
+      "peer_id": "telegram_1001",
+      "display_name": "Babi"
+    },
+    "u_dia": {
+      "peer_id": "telegram_1002",
+      "display_name": "Dia"
+    },
+    "u_pat": {
+      "peer_id": "telegram_1003",
+      "display_name": "Pat"
+    },
+    "u_bea": {
+      "peer_id": "telegram_1004",
+      "display_name": "Bea"
+    },
+    "u_kai": {
+      "peer_id": "telegram_1005",
+      "display_name": "Ken"
+    },
+    "u_sara": {
+      "peer_id": "telegram_1006",
+      "display_name": "Sara"
+    },
+    "u_mina": {
+      "peer_id": "telegram_1007",
+      "display_name": "Mina"
+    },
+    "u_reza": {
+      "peer_id": "telegram_1008",
+      "display_name": "Reza"
+    },
+    "u_nima": {
+      "peer_id": "telegram_1009",
+      "display_name": "Nima"
+    },
+    "u_tara": {
+      "peer_id": "telegram_1010",
+      "display_name": "Tara"
+    },
+    "u_omid": {
+      "peer_id": "telegram_1011",
+      "display_name": "Omid"
+    },
+    "u_hana": {
+      "peer_id": "telegram_1012",
+      "display_name": "Hana"
+    },
+    "u_sam": {
+      "peer_id": "telegram_1013",
+      "display_name": "Sam"
+    },
+    "u_yara": {
+      "peer_id": "telegram_1014",
+      "display_name": "Yara"
+    }
+  },
+  "messages": [
+    {
+      "message_id": "200",
+      "user_id": "u_alex",
+      "user_name": "Alex",
+      "content": "Alex is here",
+      "timestamp": "2026-01-01T12:00:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "201",
+      "user_id": "u_babi",
+      "user_name": "Babi",
+      "content": "Babi is here",
+      "timestamp": "2026-01-01T12:01:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "202",
+      "user_id": "u_dia",
+      "user_name": "Dia",
+      "content": "Dia is here",
+      "timestamp": "2026-01-01T12:02:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "203",
+      "user_id": "u_pat",
+      "user_name": "Pat",
+      "content": "Pat is here",
+      "timestamp": "2026-01-01T12:03:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "204",
+      "user_id": "u_bea",
+      "user_name": "Bea",
+      "content": "Bea is here",
+      "timestamp": "2026-01-01T12:04:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "205",
+      "user_id": "u_kai",
+      "user_name": "Ken",
+      "content": "Ken is here",
+      "timestamp": "2026-01-01T12:05:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "206",
+      "user_id": "u_sara",
+      "user_name": "Sara",
+      "content": "Sara is here",
+      "timestamp": "2026-01-01T12:06:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "207",
+      "user_id": "u_mina",
+      "user_name": "Mina",
+      "content": "Mina is here",
+      "timestamp": "2026-01-01T12:07:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "208",
+      "user_id": "u_reza",
+      "user_name": "Reza",
+      "content": "Reza is here",
+      "timestamp": "2026-01-01T12:08:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "209",
+      "user_id": "u_nima",
+      "user_name": "Nima",
+      "content": "Nima is here",
+      "timestamp": "2026-01-01T12:09:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "210",
+      "user_id": "u_tara",
+      "user_name": "Tara",
+      "content": "Tara is here",
+      "timestamp": "2026-01-01T12:10:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "211",
+      "user_id": "u_omid",
+      "user_name": "Omid",
+      "content": "Omid is here",
+      "timestamp": "2026-01-01T12:11:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "212",
+      "user_id": "u_hana",
+      "user_name": "Hana",
+      "content": "Hana is here",
+      "timestamp": "2026-01-01T12:12:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "213",
+      "user_id": "u_sam",
+      "user_name": "Sam",
+      "content": "Sam is here",
+      "timestamp": "2026-01-01T12:13:00+00:00",
+      "reply_to_message_id": null
+    },
+    {
+      "message_id": "214",
+      "user_id": "u_yara",
+      "user_name": "Yara",
+      "content": "Yara is here",
+      "timestamp": "2026-01-01T12:14:00+00:00",
+      "reply_to_message_id": null
+    }
+  ],
+  "current_message_id": "214"
+}

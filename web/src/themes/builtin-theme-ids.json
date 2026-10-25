@@ -1,0 +1,8 @@
+{
+  "$comment": "Built-in dashboard theme ids — the cross-language contract between presets.ts (which owns the definitions AND the labels) and hermes_cli/web_server_dashboard.py::_BUILTIN_THEME_IDS (which only needs reserved names, to keep a user YAML from shadowing a built-in). Neither side reads the other's source: presets.test.ts asserts BUILTIN_THEMES equals this list, and tests/hermes_cli/test_dashboard_themes.py asserts _BUILTIN_THEME_IDS equals it, so the two are equal by transitivity. Adding a preset means adding its id here too.",
+  "ids": [
+    "sakura-dusk",
+    "sakura-day",
+    "mono"
+  ]
+}

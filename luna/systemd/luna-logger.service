@@ -1,0 +1,22 @@
+[Unit]
+Description=Luna logger — tokenless indexer (tails state.db observe transcript)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+UMask=0077
+# No bot token here: this only reads state.db and writes luna-state.db. The gateway is the sole
+# Telegram poller. Optional: the same indexer also runs in-gateway as a plugin thread.
+ExecStart=@HERMES_HOME@/venv/bin/python @REPO_ROOT@/luna/plugins/luna-logger/run.py
+WorkingDirectory=@HERMES_HOME@
+Environment="HERMES_HOME=@HERMES_HOME@"
+Environment="PYTHONUNBUFFERED=1"
+Restart=always
+RestartSec=10
+SyslogIdentifier=luna-logger
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

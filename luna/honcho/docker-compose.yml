@@ -1,0 +1,82 @@
+# Fresh installs pull the published Honcho image, pinned by digest. Existing runtime
+# stacks are never overwritten by install.sh. Postgres/Redis stay on this private network.
+services:
+  bootstrap:
+    image: ghcr.io/plastic-labs/honcho@sha256:e95147daf6667638b1fd63465b1ceae4b559e665ada41e2d3612d3e304cf0b87
+    profiles: [setup]
+    entrypoint: ["sh", "-c", "/app/.venv/bin/python scripts/provision_db.py && /app/.venv/bin/python scripts/configure_embeddings.py --yes"]
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@database:5432/postgres
+      CACHE_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0?suppress=true
+      CACHE_ENABLED: "true"
+    env_file: [.env]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes: ["./config.toml:/app/config.toml:ro"]
+
+  api:
+    image: &honcho ghcr.io/plastic-labs/honcho@sha256:e95147daf6667638b1fd63465b1ceae4b559e665ada41e2d3612d3e304cf0b87
+    entrypoint: ["sh", "docker/entrypoint.sh"]
+    ports: ["127.0.0.1:${HONCHO_PORT:-8000}:8000"]
+    depends_on:
+      database: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment: &environment
+      DB_CONNECTION_URI: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@database:5432/postgres
+      CACHE_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0?suppress=true
+      CACHE_ENABLED: "true"
+    env_file: [.env]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes: ["./config.toml:/app/config.toml:ro"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  deriver:
+    image: *honcho
+    entrypoint: ["/app/.venv/bin/python", "-m", "src.deriver"]
+    depends_on:
+      api: {condition: service_healthy}
+    environment: *environment
+    env_file: [.env]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes: ["./config.toml:/app/config.toml:ro"]
+    restart: unless-stopped
+
+  database:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.2
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redis-data:

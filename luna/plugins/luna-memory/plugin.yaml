@@ -1,0 +1,6 @@
+name: luna-memory
+version: 0.1.0
+description: "Per-identity memory provider. Owns the deterministic identity registry, materializes Honcho peer aliases + cards, writes turns under the correct author peer, and enforces hard recall budgets. Replaces the bundled honcho provider (memory.provider: luna)."
+author: "Luna"
+kind: backend
+hooks: []

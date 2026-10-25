@@ -1,0 +1,35 @@
+{
+  "product": "Luna",
+  "version": "0.1.0-alpha.1",
+  "engine": {
+    "name": "hermes-agent",
+    "version": "0.21.3",
+    "commit": "59f9ff8dbc75b9c4f07ae10174df730f7882a505"
+  },
+  "native": {
+    "name": "opencode",
+    "version": "2.1.2",
+    "protocol": ">=2.0.30,<2.2.0"
+  },
+  "data": {
+    "luna_schema": 3,
+    "settings_journal": 1,
+    "backup_format": 1,
+    "supported_luna_schemas": [
+      2,
+      3
+    ]
+  },
+  "supported_os": [
+    "linux",
+    "macos"
+  ],
+  "python": ">=3.11,<3.14",
+  "chat_runtime": {
+    "node": "v22.23.4",
+    "tui": "bundled"
+  },
+  "preview_os": [
+    "windows"
+  ]
+}

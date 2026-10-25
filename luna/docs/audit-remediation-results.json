@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-24",
+  "product": "Luna",
+  "version": "0.1.0-alpha.1",
+  "local_platform": "Linux x64, Python 3.11",
+  "tests": {
+    "companion": {
+      "passed": 673,
+      "skipped_live": 2
+    },
+    "gateway_subset": 145,
+    "dashboard_api_subset": 231,
+    "affected_api_and_recovery_followups": 237,
+    "dashboard_frontend": 558,
+    "targeted_tui": 133,
+    "cloud_adapter_followups": 105
+  },
+  "tui_typecheck": true,
+  "native_tool_bridge": {
+    "passed": true,
+    "actual_tool": "read_file",
+    "local_model_requests": 3
+  },
+  "native_context": {
+    "passed": true,
+    "turns": 4,
+    "persona": true,
+    "channel_policy": true,
+    "room_sidecar": true,
+    "memory_recall": true,
+    "plugin_context": true,
+    "image": true,
+    "resume": true,
+    "reseed": true,
+    "transport_author": true
+  },
+  "memory_integration": {
+    "health": true,
+    "write_read_search_derivation": true,
+    "backup": true,
+    "private_network_maintenance": true,
+    "restart_recall": true,
+    "checks": {
+      "ok": true,
+      "detail": "Memory data-path check completed",
+      "checks": {
+        "write_read": true,
+        "embedding_search": true,
+        "derivation": true,
+        "cleanup": true
+      },
+      "revision": "d8cdf2a61020140a6b77d1004239e1d10312eac01b0776c9ec7b2406a060a2ff",
+      "at": "2026-10-24T17:04:15.802576+00:00"
+    },
+    "local_model_requests": {
+      "chat": 2,
+      "embedding": 30
+    }
+  },
+  "installed_release": {
+    "source_removed": true,
+    "home_contains_spaces": true,
+    "dashboard_and_assets": true,
+    "authenticated_api": true,
+    "all_four_plugins": true,
+    "service_definitions": true,
+    "no_gateway_start_or_restart": true,
+    "actual_tui_and_python_child": true,
+    "selected_persona_in_inference": true,
+    "luna_guidance_in_inference": true,
+    "no_hermes_identity": true,
+    "no_unrelated_sdk_install": true
+  },
+  "artifact": {
+    "name": "luna-0.1.0-alpha.1.tar.gz",
+    "bytes": 18422060,
+    "sha256": "25c8d34e74806f2447650809ec37b28aef1ee5cb38bdaf87b7525ba3dc3671f3"
+  },
+  "not_performed": [
+    "live Telegram cutover",
+    "public release",
+    "local macOS execution",
+    "off-loopback deployment"
+  ],
+  "model_calls": "Local fixtures only during remediation. No paid/cloud inference or Telegram poller."
+}

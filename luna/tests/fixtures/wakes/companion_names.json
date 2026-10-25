@@ -1,0 +1,10 @@
+{
+  "name": "Mira",
+  "aliases": ["Riri"],
+  "cases": [
+    {"text": "Mira?", "selected": true},
+    {"text": "Riri?", "selected": true},
+    {"text": "Luna?", "selected": false},
+    {"text": "mirage", "selected": false}
+  ]
+}

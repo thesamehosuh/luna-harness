@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenCode Go header shim for Honcho (adds x-opencode-session)
+Documentation=file:@REPO_ROOT@/luna/honcho/opencode_go_proxy.py
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Honcho's OpenAI client cannot send custom headers, but OpenCode Go rejects any request without
+# x-opencode-session (HTTP 400 MissingSessionID). This shim adds it.
+ExecStart=/usr/bin/python3 @REPO_ROOT@/luna/honcho/opencode_go_proxy.py --port 8010 --upstream https://opencode.ai/zen/go --session-key honcho
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,13 @@
+# Provider/model/embedding settings are supplied by the dashboard in the runtime .env.
+# No local embedding server, subscription proxy, or hand-built image is required.
+[llm]
+default_max_tokens = 2500
+
+[deriver]
+flush_enabled = true
+log_observations = false
+
+[dream]
+document_threshold = 20
+min_hours_between_dreams = 1
+idle_timeout_minutes = 15

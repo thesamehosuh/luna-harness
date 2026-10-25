@@ -1,0 +1,525 @@
+# Luna harness — runtime config template.
+#
+# This is a *template*. `luna/deploy/install.sh` renders it to $HERMES_HOME/config.yaml and the
+# migrate script diffs it against the live ~/.hermes/config.yaml. Secrets never live here; they go
+# in $HERMES_HOME/.env (untracked).
+#
+# Luna-specific keys live under `luna:` and `display.platforms.telegram_group`. Everything else
+# mirrors upstream hermes so merges stay predictable.
+
+# Schema version (hermes config migrations). Keep in step with the pinned upstream; a mismatch makes
+# `luna doctor` report "migrate config".
+_config_version: 45
+
+model:
+  # Setup installs the native engine and selects from its current free catalog.
+  base_url: ""
+  default: ""
+  provider: opencode-engine
+  api_mode: chat_completions
+fallback_providers: []
+toolsets:
+  - hermes-cli
+  - people
+
+agent:
+  max_turns: "90"
+  gateway_timeout: 1800
+  restart_drain_timeout: 180
+  api_max_retries: 3
+  tool_use_enforcement: auto
+  reasoning_effort: medium
+  agent_cache:
+    idle_ttl_secs: 21600
+
+context:
+  engine: compressor
+
+# Skills remain available without imposing a writing style on every new character.
+skills:
+  auto_load: []
+
+# ── Memory: luna-memory replaces the bundled honcho provider (deterministic per-identity) ───────
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+  write_approval: false
+  memory_char_limit: 2200
+  user_char_limit: 1375
+  provider: luna-memory
+
+# Honcho client/deployment settings consumed by luna-memory.
+honcho:
+  baseUrl: http://localhost:8000
+  contextTokens: 2000
+  dialecticCadence: 8
+  dialecticMaxChars: 600
+  dialecticReasoningLevel: medium
+  observationMode: directional
+  recallMode: hybrid
+  saveMessages: true
+  sessionStrategy: per-session
+  writeFrequency: async
+  dialecticDepth: 1
+  contextCadence: 1
+  injectionFrequency: every-turn
+  reasoningHeuristic: true
+  reasoningLevelCap: medium
+  dialecticDynamic: true
+  recallSync: false
+  queryRewrite: false
+  firstTurnBaseWait: 3
+  firstTurnDialecticWait: 0
+  messageMaxChars: 25000
+  dialecticMaxInputChars: 10000
+
+# Dashboard appearance is configured through the theme picker.
+dashboard:
+  theme: sakura-dusk
+
+# ── Display: purple Luna skin; group surface is quiet (engine edit 0001 gives us telegram_group) ─
+display:
+  skin: luna
+  interface: cli
+  show_reasoning: false
+  streaming: false
+  interim_assistant_messages: false
+  memory_notifications: 'off'
+  credits_notices: false
+  turn_completion_explainer: false
+  busy_ack_enabled: false
+  final_response_markdown: strip
+  platforms:
+    # DM (owner console): verbose is fine.
+    telegram:
+      streaming: true
+    # Group surface (engine edit 0001, see luna/docs/engine-vendor.md): conversational only.
+    telegram_group:
+      tool_progress: "off"
+      interim_assistant_messages: false
+      streaming: false
+      show_reasoning: false
+      busy_ack_detail: false
+      long_running_notifications: false
+      suppress_warning_notifications: true
+      cleanup_progress: true
+      # Engine edit 0014: while Luna is answering one member, another member's message is queued as
+      # the next turn instead of steering/interrupting the in-flight answer. DMs keep the global
+      # default (`interrupt`): the operator may still correct her mid-turn in their own DM.
+      busy_input_mode: queue
+
+tts:
+  enabled: false
+
+# ── Platforms: telegram only ────────────────────────────────────────────────────────────────────
+telegram:
+  # Enables the adapter's reaction capability. luna-ambient's reaction tier goes through
+  # platform_actions.add_reaction -> adapter._set_reaction, which is gated by this flag, so it must
+  # be true for self-wake reactions to work.
+  reactions: true
+  # ...but do NOT let hermes react to every message itself (👀/👍/👎 lifecycle reactions). Engine
+  # edit 0004 splits this out, so the capability stays on while hermes stays quiet.
+  progress_reactions: false
+  extra:
+    rich_messages: true
+    rich_drafts: false
+    # NOTE: fill the operator/group ids per deployment (real values live in the untracked
+  # $HERMES_HOME/config.yaml, never in this template).
+  #
+  # SECURITY: privileged approvals (the "Allow once / Always" prompt on a command Luna wants to
+  # run) require the tap to come from a user listed here. The chat allowlist below is NOT enough:
+  # it admits a whole chat, so without these lists any member of a watched group could approve a
+  # host command. Fail-closed — with no id listed, nobody can approve, including you. Use `*` only
+  # for a single-operator group chat you fully control.
+  # Optionally a dedicated approver list. Leave these UNSET unless you want a separate, stricter
+  # set from your admin list: when present they become the sole authority for approvals, so a
+  # placeholder value here would silently override the admin ids below and deny everyone.
+  # allow_from:
+  #   - 0
+  # group_allow_from:
+  #   - 0
+  allow_admin_from:
+    - 0
+  group_allow_admin_from:
+    - 0
+  # No `mention_patterns`: the literal "luna" word is NOT a trigger. Formal Telegram @-mentions
+  # still trigger reactively; text-only "luna …" is decided semantically by jev
+  # (`addressed_to_luna`) in luna-ambient.
+  require_mention: true
+  # Single-token room log (decision D20): the gateway captures unmentioned chatter into the shared
+  # observe transcript; luna-logger tails it. Never add a second bot poller.
+  observe_unmentioned_group_messages: true
+  group_allowed_chats:
+    - '-1000000000000'
+  user_allowed_commands:
+    - new
+  group_user_allowed_commands: []
+
+gateway:
+  scale_to_zero:
+    idle_timeout_minutes: 5
+  strict: false
+  api_server:
+    max_concurrent_runs: 10
+
+# Preserve identity and warm per-person agents inside busy forum topics too.
+group_sessions_per_user: true
+thread_sessions_per_user: true
+
+sessions:
+  auto_prune: true
+  retention_days: 30
+
+# ── Plugins: Luna overlay + the minimal upstream set ────────────────────────────────────────────
+plugins:
+  enabled:
+    - telegram-platform
+    - web-searxng
+    - web-ddgs
+    - security-guidance
+    - disk-cleanup
+    - luna-room
+    - luna-memory
+    - luna-ambient
+    - luna-logger
+  disabled:
+    # Non-telegram platforms and non-honcho memory providers (kept inert; the runtime also omits
+    # their directories). Extend as upstream adds more.
+    - discord-platform
+    - slack-platform
+    - matrix-platform
+    - mattermost-platform
+    - whatsapp-platform
+    - wecom-platform
+    - feishu-platform
+    - google_chat-platform
+    - homeassistant-platform
+    - irc-platform
+    - line-platform
+    - ntfy-platform
+    - photon-platform
+    - raft-platform
+    - simplex-platform
+    - sms-platform
+    - dingtalk-platform
+    - teams-platform
+    - teams_pipeline
+    - browser-browser-use
+    - browser-browserbase
+    - browser-firecrawl
+    - computer_use
+    - email-platform
+  entries:
+    luna-ambient:
+      # Required for proactive wakes via ctx.inject_message into the shared room session.
+      allow_gateway_injection: true
+      # Required for the reaction tier (ctx.platform_actions.add_reaction).
+      allow_platform_actions: true
+      allow_tool_override: false
+
+# ── Toolsets: trimmed per surface (usage-ledger evidence from the notes) ────────────────────────
+platform_toolsets:
+  cli:
+    - people
+    - clarify
+    - code_execution
+    - cronjob
+    - delegation
+    - file
+    - memory
+    - skills
+    - terminal
+    - todo
+    - tts
+    - vision
+    - web
+  # The Telegram DM toolset below is for configured owner DMs. Group access is
+  # restricted separately by luna.access.group_toolsets (web + people by default).
+  # Host actions remain approval-gated and operational notices route to the owner DM.
+  telegram:
+    - people
+    - clarify
+    - code_execution
+    - cronjob
+    - delegation
+    - file
+    - memory
+    - messaging
+    - session_search
+    - skills
+    - terminal
+    - todo
+    - tts
+    - vision
+    - web
+
+privacy:
+  redact_pii: true
+
+# ── Luna overlay configuration ──────────────────────────────────────────────────────────────────
+luna:
+  conversation:
+    enabled: true
+    settle_seconds: 1
+    response_gap_seconds: 2
+    max_pending: 16
+    max_age_seconds: 60
+    max_answer_age_seconds: 120
+    max_turns_per_burst: 3
+    burst_idle_seconds: 8
+    max_turns_per_minute: 6
+    max_parallel_rooms: 4
+    overload_notice: true
+  setup:
+    memory: pending
+    jev: pending
+    telegram: pending
+  opencode:
+    memory_budget_mib: 640
+    timeout_seconds: 180
+  access:
+    group_toolsets: [web, people]
+    group_host_access: false
+  character:
+    name: ""  # Empty derives from the SOUL title.
+    aliases: []
+  # Memory uses a separate OpenAI-compatible model and embedding endpoint. The Setup
+  # page stores these keys in .env. Existing Honcho stacks keep their own settings.
+  memory_stack:
+    reasoning_source: companion
+    docker_context: ""
+    provider: ""
+    base_url: ""
+    model: ""
+    api_key_env: ""
+    embedding_source: bundled
+    embedding_base_url: ""
+    embedding_model: luna-multilingual-minilm-v1
+    embedding_key_env: LUNA_EMBEDDING_API_KEY
+    embedding_dimensions: 384
+  docs:
+    # Documentation URL for the dashboard's Docs page. Empty = no iframe: the page links to the
+    # in-dashboard /help instead. The default is empty on purpose -- the old default pointed the
+    # whole Docs surface at a third-party site, which read as though that site documented Luna.
+    # Set it only to a URL that documents *this* install.
+    url: ""
+
+  telegram:
+    # Quick setup (the "Create with QR" panel) is OFF unless this is set.
+    #
+    # It creates your bot and learns your Telegram user id by talking to a third-party service,
+    # which is why it is opt-in: with a default it would look like part of Luna, and a self-hoster
+    # would send a bot name and a bearer token to someone else's infrastructure without choosing
+    # to. Leave empty and manual bot-token entry is the only path — nothing is lost.
+    #
+    # Point this at a service you operate, or at the one your deployment documents.
+    onboarding_service_url: ""
+
+  identity:
+    platform: telegram
+    peer_prefix: telegram_
+    overrides_file: $HERMES_HOME/identity_overrides.json
+
+  room:
+    chat_id: ""
+    # Bounded room/thread block staged via the ephemeral sidecar (never channel_prompt).
+    max_lines: 20
+    max_chars: 2000
+    max_age_minutes: 360
+    per_line_chars: 220
+    thread_depth: 8
+
+  output:
+    language: auto
+    style_filter: false
+    # Only applies when casual chat style is enabled. Faces, quotes and code stay intact.
+    sentence_breaks: true
+    max_chars: 1200
+    # Group-surface emoji policy (enforced in luna_core.text, not just the persona).
+    # New-user default: no emoji in group output. Choose a palette in Character.
+    # emoji_filter: false turns emoji shaping off — every emoji the model writes survives.
+    # When true: strip_emoji: true removes all of them, false keeps only `allowed_emoji`.
+    emoji_filter: true
+    strip_emoji: false
+    # Only consulted when emoji_filter is true. Empty list = no emoji at all.
+    allowed_emoji: []
+    # Hard line cap for group replies (luna_core.text.shape_group_reply).
+    max_lines: 4
+
+  memory:
+    # Hard recall ceilings (the 58,335-char prefetch regression).
+    recall_max_chars: 2000
+    recall_timeout_seconds: 2
+    prefetch_max_chars: 4000
+    room_session_scope: room
+    shared_room_session: true
+
+  data:
+    backup_days: 7
+    # Retention is enforced, not aspirational: the luna-logger indexer loop applies this window to
+    # luna-state.db (and, when prune_gateway_state is on, the gateway's observed rows) on the
+    # interval below. auto_prune gates ONLY the automatic in-process passes: a manual run of
+    # luna/tools/prune_data.py (and the daily luna-data-retention.timer backstop) still prunes.
+    # A pass is skipped entirely if config.yaml cannot be read, rather than falling back to 1 day.
+    retention_days: 1
+    batch_size: 1000
+    prune_gateway_state: true
+    auto_prune: true
+    auto_prune_interval_minutes: 60
+
+  logs:
+    retention_days: 1
+    files:
+      - agent.log
+      - errors.log
+      - gateway.log
+      - gui.log
+
+  ambient:
+    watched_chats: []          # Opt-in allowed groups; empty watches no groups.
+    guard:
+      max_jev_calls_per_hour: 60
+      max_reported_cost_per_day: 1.0
+    enabled: false
+    dry_run: true              # flip to false only after the dry-run review
+    # How the *room* talks, separately from the persona — shapes wake judgments. Set this to your
+    # group's voice; the neutral default below is deliberately bland.
+    room_register: "a private group chat. People talk casually and informally with each other."
+    # Watch live messages only: poll cadence, and how stale a backlog may be before we skip it
+    # (a stale watermark is fast-forwarded, so jev is never spent on old messages).
+    # This poll is the dominant reply-latency term (average added delay = half a poll). Keep it low.
+    # Let a message settle before spending a jev call on it: in a busy room most messages are
+    # superseded within seconds. Anything naming the configured companion bypasses this, so directed replies are
+    # never delayed. Measured on a real 111-message window: 10s evaluates 41% of messages.
+    # 0 disables it (ask about every message).
+    settle_seconds: 10
+    poll_seconds: 3
+    stale_after_minutes: 15
+    # jev is Zen-only. OpenCode Go does NOT serve /systemone.
+    jev:
+      # Route chain is an ordered list of NAMES from the `providers` registry below — hermes
+      # style. Reorder to reprioritise, rename to swap a route, add a provider and slot it
+      # anywhere. First entry is the primary; the rest are fallbacks, tried in order. Only a
+      # rate limit (429/529) or a transport failure advances the chain; a 400 is our bug and
+      # never spends the next route. Unknown names are skipped (fail closed).
+      #
+      # The shipped route is free only. Add a configured local or paid provider in Behaviour
+      # when you explicitly want fallback; the harness never silently adds a destination.
+      # timeout_seconds bounds the complete judgment across retries/routes (maximum 60s).
+      #
+      # `tier` (optional) is the cost class shown in the Behaviour page's verdict feed as via=free|local|paid.
+      # Inferred from base_url/model when omitted (loopback/private → local, "free" in the
+      # target → free, else paid); set it to override for an unusual host.
+      timeout_seconds: 20
+      route: [zen-free]         # Local/paid fallback routes require an explicit dashboard choice.
+      providers:
+        zen-free:
+          base_url: https://opencode.ai/zen/v1
+          model: jev-1.13-free
+          api_key_env: OPENCODE_ZEN_API_KEY
+          tier: free
+        # Any Jev-compatible System One endpoint you host (CLM or Laya — setup, ports, and
+        # measured limits: skills/luna/local-jev). No api_key_env = no Authorization header.
+        # If nothing is listening the slot fails over almost instantly (connection refused).
+        # Measured expectations (luna/local-jev/README.md): free/private middle fallback,
+        # NOT hosted-Jev decision parity yet — expect more silence. `model` is the name your
+        # local server serves/accepts.
+        local:
+          base_url: http://127.0.0.1:8700/v1   # CLM; Laya: http://127.0.0.1:8009/v1
+          model: clm-latest                    # Laya: jev-ml
+          tier: local
+        typesafe:
+          base_url: https://api.typesafe.ai/v1
+          model: jev-latest
+          api_key_env: TYPESAFE_API_KEY
+          tier: paid
+    thresholds:
+      min_new_messages: 3
+      min_minutes_since_luna: 10
+      min_candidate_chars: 3
+      directed_min_addressed: 0.70
+      message_min_value: 0.60
+      # Dedicated "would speaking up be welcome?" judgment. Replaces best_action, which returns
+      # `silent` on ~98% of real messages and made this tier unreachable.
+      message_min_fit: 0.42
+      # A tap must not swallow a real question she could answer.
+      # With the reworded `has_open_question_luna_can_answer`, small talk scores ~0.02 and
+      # genuine questions 0.59-0.90, so 0.55 separates them cleanly.
+      reaction_yield_open_question: 0.55
+      reaction_yield_add_value: 0.45
+      # "Just right" timing band around the middle Score level (jev scores land between levels).
+      timeliness_center: 1.0
+      timeliness_band: 0.5
+      message_max_addressed: 0.25
+      message_max_sensitive: 0.20
+      message_max_private: 0.20
+      message_max_venting: 0.30
+      safety_max_sensitive: 0.60
+      safety_max_private: 0.60
+      reaction_min_fit: 0.66
+      # Low on purpose: `value` is weighted for writing a message, not tapping an emoji. The real
+      # fit/anti-spam brakes are reaction_min_fit and reaction_min_freshness.
+      reaction_min_value: 0.35
+      reaction_min_freshness: 0.43
+      # jev's emoji_choice confidence has median ~0.49; a 0.50 gate silently rejected 51% of
+      # otherwise-firing reactions. The allow-list already constrains the emoji to this set.
+      reaction_min_emoji_confidence: 0.35
+      # A message that names the companion but asks nothing gets a reaction instead of a text reply; anything
+      # with an open question above this still gets a real answer.
+      reaction_max_open_question: 0.50
+      # An explicit "react to this" request outranks the directed text reply.
+      reaction_request_min: 0.70
+      # Reactions are still gated on sensitive topics (a sensitive message never wakes in any
+      # tier). Venting is intentionally NOT gated: reacting to a rant is low-key, not an interjection.
+      # With the reworded `topic_is_sensitive`, a dark joke scores ~0.20 and real distress
+      # 0.66-0.86, so 0.40 separates them. The old wording rated everything 0.93+.
+      reaction_max_sensitive: 0.40
+    budget:
+      emergency_max_per_hour: 12  # Independent loop guard, including unlimited policies.
+      # Per-day/weekly ceilings are OFF by default — jev decides frequency via its fit/value/
+      # freshness judgments. Set any of these to a positive value to enforce a hard ceiling instead
+      # (loop protection). Dedup (never acting twice on one message) is always on.
+      # The reaction cooldown is the one deliberate code-level brake: jev's freshness judgment
+      # alone let reactions bunch up, so at most one reaction per window regardless of jev.
+      message_cooldown_minutes: 0
+      message_max_per_day: null
+      message_max_per_week: null
+      reaction_cooldown_minutes: 15
+      reaction_max_per_day: null
+      reaction_max_per_week: null
+      directed_cooldown_minutes: 0
+      directed_max_per_day: null
+      directed_max_per_week: null
+    # Regex mention fallback for when jev is DOWN (hard error or rate-limit cooldown). A message
+    # matching any of these Python regexes wakes the companion as a directed reply, no LLM judgment.
+    # Empty/absent = no fallback (stay silent while jev is down). This is the outage path only:
+    # when jev answers, its semantic "does this name the companion" judgment decides, never this regex.
+    mention_fallback: []
+    reactions:
+      # Opt-in: ships EMPTY (AGENTS.md §7). Self-waking reactions are a companion feature some
+      # people love and others find uncanny, so the default is silence and you add your palette.
+      # Uncomment to enable. 😭 is the versatile, most-used one.
+      allowed: []
+      #   - "👍"
+      #   - "🤣"
+      #   - "😭"
+
+  notify:
+    # Operator DM for non-conversational group output (engine edits 0010/0011): status/diagnostic
+    # warnings, operational notices, and approval/clarify prompts raised during a *group* turn are
+    # delivered here instead of the group; the conversational reply still goes to the group.
+    # Cron is exempt: cron jobs keep their own delivery policy and reach a group as the job's
+    # response only (engine edit 0011 strips the "Cronjob Response"/job_id header and the stop/manage
+    # footer for group targets; DMs keep the full envelope). Replace the '0' placeholder with the
+    # operator's DM chat id in the untracked $HERMES_HOME/config.yaml — '0' disables routing.
+    operator_chat:
+      telegram: '0'
+
+  logger:
+    state_db: $HERMES_HOME/state.db
+    index_db: $HERMES_HOME/luna-state.db
+    # Index cadence (observe transcript -> luna-state.db): first term in the wake-latency chain.
+    poll_seconds: 2
+    batch: 500
+    # Keep the Honcho room session current (per-author, idempotent, best-effort).
+    sync_honcho: true
