@@ -44,9 +44,13 @@ def verify(root: Path, *, model: str | None = None, use_native_login=False, inst
                 tools = [tool["function"]["name"] for tool in body.get("tools", [])]
                 system = "\n".join(str(row.get("content", "")) for row in body["messages"]
                                    if row.get("role") in {"system", "developer"})
-                # Auxiliary title calls can carry a provider placeholder tool. Classify by
-                # Luna's trusted main-turn policy, rather than catalog emptiness.
-                if "Use only the Luna MCP tools supplied for this conversation." not in system:
+                # Native title generation may inherit the conversation's policy. Recognize
+                # its explicit system instruction before classifying main inference;
+                # an empty main catalog must still fail the tool assertion below.
+                title_request = any(str(row.get("content", "")).startswith(
+                    "You name conversations so the user can find them later in a list of past sessions."
+                ) for row in body["messages"] if row.get("role") == "system")
+                if title_request or "Use only the Luna MCP tools supplied for this conversation." not in system:
                     delta, finish = {"role": "assistant", "content": "Native Luna tool test"}, "stop"
                 elif not any(row.get("role") == "tool" and marker in json.dumps(row) for row in body["messages"]):
                     if "luna_read_file" not in tools:
