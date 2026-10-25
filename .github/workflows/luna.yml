@@ -2,8 +2,12 @@ name: Luna release checks
 on:
   workflow_call:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: luna-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

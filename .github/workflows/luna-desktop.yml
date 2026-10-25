@@ -29,6 +29,9 @@ on:
       - pyproject.toml
       - uv.lock
       - .github/workflows/luna-desktop.yml
+concurrency:
+  group: luna-desktop-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

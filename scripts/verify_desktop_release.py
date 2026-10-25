@@ -105,7 +105,8 @@ assert len(vectors[0])==384 and score(vectors[0],vectors[1])>score(vectors[0],ve
             saved = put("/api/luna/character", {"output": {"sentence_breaks": False}}, character["revision"])
             assert saved["bundle"]["output"]["sentence_breaks"] is False
             put("/api/luna/character", {"output": character["output"]}, saved["bundle"]["revision"])
-            assert "Make this character your own" in exported["soul"]
+            assert exported["soul"] == (release / "luna/soul/DEFAULT.md").read_text(encoding="utf-8")
+            assert exported["soul"].startswith("# Companion\n")
             with opener.open(base + "/onboarding", timeout=30) as response:
                 assert b"<html" in response.read().lower()
             with opener.open(base + "/docs", timeout=30) as response:
