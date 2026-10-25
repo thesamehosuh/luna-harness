@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish this tested version as a public alpha release after all jobs pass
+        description: Prepare a draft alpha release after all jobs pass; publish after packaged-launcher acceptance
         required: false
         type: boolean
         default: false
@@ -143,7 +143,7 @@ jobs:
         run: |
           cargo install tauri-driver --version 2.1.0 --locked
           npm run tauri:build:debug --workspace apps/bootstrap-installer -- --no-bundle
-          dbus-run-session -- xvfb-run -a uv run --no-sync --python 3.11 python scripts/verify_desktop_launcher.py \
+          xvfb-run -a dbus-run-session -- uv run --no-sync --python 3.11 python scripts/verify_desktop_launcher.py \
             --application apps/bootstrap-installer/src-tauri/target/debug/Luna \
             --runtime-home "$RUNNER_TEMP/luna-desktop-smoke/Clean Luna home" \
             --output "$RUNNER_TEMP/luna-launcher-acceptance.json"
@@ -155,11 +155,13 @@ jobs:
           export LUNA_RELEASE_DESCRIPTOR=$(python -c 'from pathlib import Path; print(Path("artifacts/luna-launcher-release.json").resolve())')
           npm run tauri:build --workspace apps/bootstrap-installer -- --bundles "$NATIVE_BUNDLES"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
         with:
           name: luna-${{ matrix.name }}-candidate
           path: |
             apps/bootstrap-installer/src-tauri/target/release/bundle/**
             ${{ runner.temp }}/luna-launcher-acceptance.json
+            ${{ runner.temp }}/luna-launcher-acceptance.driver.log
           if-no-files-found: error
 
   publish:
@@ -203,11 +205,10 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: release-assets/*
-      - name: Publish alpha release
+      - name: Prepare draft alpha release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(python3 -c 'import json; print(json.load(open("luna-release.json"))["version"])')
           gh release create "v$version" release-assets/* --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" --title "Luna $version" --prerelease --draft --notes-file RELEASE_NOTES.md
-          gh release edit "v$version" --repo "$GITHUB_REPOSITORY" --draft=false

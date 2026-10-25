@@ -113,6 +113,8 @@ def verify(root: Path, *, model: str | None = None, use_native_login=False, inst
                 raise RuntimeError("No compatible OpenCode binary. Re-run this developer check with --install.")
             with patch("luna_core.opencode_client.isolated_environment", environment), patch(
                 "luna_core.opencode_runtime.OpenCodeServer", NativeTestServer
+            ), patch(
+                "agent.turn_context._maybe_title_session_at_turn_start", lambda *args: None
             ):
                 agent = AIAgent(model=model, provider="opencode-engine", quiet_mode=True,
                     enabled_toolsets=["file"], skip_memory=True, skip_context_files=True,

@@ -12,10 +12,10 @@ The native app embeds one generated `luna-launcher-release.json` descriptor. Tha
 contains the HTTPS archive URL, expected version and checksum. No public URL is guessed in source.
 Release-mode Rust builds fail when the descriptor is missing.
 
-The **Luna desktop candidates** workflow builds the archive once, then tests that exact archive
+The **Luna desktop release** workflow builds the archive once, then tests that exact archive
 and builds installers on Linux x64/arm64, macOS x64/arm64 and Windows x64. Its default download URL
 uses the workflow's own repository and tag `v<luna-release.json version>`. A workflow input can
-select another HTTPS release-assets directory. The workflow uploads reviewable artifacts. Its explicit `publish` option creates a prerelease
+select another HTTPS release-assets directory. The workflow uploads reviewable artifacts. Its explicit `publish` option creates a draft prerelease
 only after all required native checks pass, attaches those exact archives/installers and generates
 checksums and GitHub provenance. Platform certificates are separate; unsigned alpha previews
 must remain labeled as such.
@@ -28,7 +28,8 @@ Publisher steps:
 3. Alpha previews are explicitly unsigned. Complete OS signing/notarization with the publisher's
    identity before claiming a frictionless beginner installation on macOS/Windows.
 4. The workflow collects the exact tested files, verifies their runtime checksum, attests them,
-   uploads them to a draft prerelease and publishes only after every upload succeeds.
+   uploads them to a draft prerelease. Launch the packaged Linux artifact on the acceptance
+   machine, then publish that exact draft after successful acceptance.
 5. Have a tester install the published artifact on a clean machine without developer tools or help.
 
 Developer-only equivalent:
@@ -154,3 +155,16 @@ the last 1.23 patch with an Intel wheel; newer ONNX Runtime releases ship ARM-on
 Other supported platforms use 1.27.0. Every native job installs the actual archive and runs
 the bundled multilingual model, so a missing platform wheel blocks publication. CI probes
 run through the explicitly selected Python 3.11 interpreter rather than a runner's system Python.
+
+## Linux packaging acceptance
+
+The launcher pins Tauri CLI 2.12.2, including the upstream linuxdeploy/GTK plugin
+update ([tauri#16062](https://github.com/tauri-apps/tauri/pull/16062)). Older
+bundling could crash before startup when bundled display libraries met newer host
+NVIDIA/Wayland drivers. Test the packaged AppImage as well as the debug executable.
+Linux CI starts Xvfb before the D-Bus session so activated services inherit DISPLAY,
+and retains native driver logs on failure.
+
+The release workflow uploads an attested **draft** after every platform passes.
+Publish that exact draft only after launching its packaged Linux installer on the
+acceptance machine; do not substitute a locally rebuilt archive or installer.
