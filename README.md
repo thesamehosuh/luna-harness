@@ -1,4 +1,4 @@
-# Luna
+![Luna — personal AI companion harness, in Sakura Dusk ASCII art](assets/luna-ascii.svg)
 
 **Your own AI companion for the group chat.** Luna is a self-hosted harness for a personal AI
 character that lives in your Telegram group and can assist in your DM. **Luna is the harness's

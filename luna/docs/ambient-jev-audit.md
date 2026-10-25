@@ -13,7 +13,7 @@ per-attempt usage admission; honest Setup proof and worker health; gateway-owned
 The dashboard exposes selected watched groups and unknown-price calls. Dynamic content still uses
 sidecars/user context, preserving the prompt-cache contract.
 
-Verification: **814 companion tests (2 live skipped), 147 gateway tests, 567 dashboard tests**.
+Verification: **817 companion tests (2 live skipped), 147 gateway tests, 568 dashboard tests**.
 Additional focused delivery and final core checks passed (77 and 105 cases). The new regression
 suite is `luna/tests/component/test_ambient_jev_regressions.py`; real adapter receipt/retry tests are
 in `test_room_dispatch_gateway.py`. Hosted judgment quality, provider availability and unassisted

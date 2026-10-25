@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="430" viewBox="0 0 1440 430" role="img" aria-labelledby="title description">
+<title id="title">Luna</title>
+<desc id="description">A large ASCII crescent moon and LUNA wordmark in Sakura Dusk pink, lavender and warm gold. Personal AI companion harness.</desc>
+<defs><linearGradient id="letters" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#eeafce"/><stop offset="0.55" stop-color="#f3d6ab"/><stop offset="1" stop-color="#bfa8e9"/></linearGradient></defs>
+<rect x="1" y="1" width="1438" height="428" rx="28" fill="#17132b" stroke="#3c2c4d" stroke-width="2"/>
+<g font-family="'DejaVu Sans Mono','Liberation Mono',Consolas,monospace" font-weight="400">
+<text xml:space="preserve" font-size="22" fill="#eeafce"><tspan x="72" y="85">           _..._</tspan><tspan x="72" y="108">        .-'     `-.</tspan><tspan x="72" y="131">      .'    .-""""-.</tspan><tspan x="72" y="154">     /    .'</tspan><tspan x="72" y="177">    ;    /</tspan><tspan x="72" y="200">    |   ;</tspan><tspan x="72" y="223">    |   |</tspan><tspan x="72" y="246">    ;   ;</tspan><tspan x="72" y="269">     \   \</tspan><tspan x="72" y="292">      `.  `.</tspan><tspan x="72" y="315">        `-. `-.___.-'</tspan><tspan x="72" y="338">           `-.....-'</tspan></text><text xml:space="preserve" font-size="36" fill="url(#letters)"><tspan x="452" y="148">    __      __  __     _   __     ___</tspan><tspan x="452" y="191">   / /     / / / /    / | / /    /   |</tspan><tspan x="452" y="234">  / /     / / / /    /  |/ /    / /| |</tspan><tspan x="452" y="277"> / /___  / /_/ /    / /|  /    / ___ |</tspan><tspan x="452" y="320">/_____/  \____/    /_/ |_/    /_/  |_|</tspan></text><text x="458" y="366" fill="#bfa8e9" font-size="15" letter-spacing="4">PERSONAL AI COMPANION HARNESS</text>
+<text x="377" y="87" font-size="22" fill="#f3d6ab">*</text>
+<text x="1268" y="79" font-size="26" fill="#bfa8e9">.</text>
+<text x="1328" y="327" font-size="22" fill="#eeafce">+</text>
+<text x="354" y="345" font-size="24" fill="#bfa8e9">.</text>
+<text x="109" y="361" font-size="18" fill="#f3d6ab">*</text>
+<text x="1162" y="61" font-size="16" fill="#eeafce">+</text>
+</g>
+</svg>

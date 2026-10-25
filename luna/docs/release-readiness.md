@@ -11,8 +11,8 @@ The latest approved [system-audit remediation](audit-remediation.md),
 [profile/defaults audit](profiles-and-people.md) and
 [group conversation fixes](group-conversation-audit.md) cover profile isolation, memory lifecycle,
 group capability boundaries, bounded turn taking, recipient/topic isolation, retention/recovery and
-every Luna startup path. Current gates pass: **814 companion tests (2 live skipped), 147 gateway
-contract tests and 567 frontend tests**. Another focused engine/API run passed 169 tests (1 skipped).
+every Luna startup path. Current gates pass: **817 companion tests (2 live skipped), 147 gateway
+contract tests and 568 frontend tests**. Another focused engine/API run passed 169 tests (1 skipped).
 Frontend type checking and production build pass; lint has no errors and 34 existing warnings.
 
 The real OpenCode runtime checked four inference payloads, including a changed group reply target:
