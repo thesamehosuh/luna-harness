@@ -4,7 +4,7 @@
 Requires tauri-driver, WebKitWebDriver, xdotool and a graphical session (or Xvfb + D-Bus).
 Startup entries use a temporary XDG directory; all owned test processes are removed in finally.
 """
-import argparse, ctypes, ctypes.util, json, os, signal, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+import argparse, ctypes, ctypes.util, http.client, json, os, signal, shutil, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -31,10 +31,20 @@ def port():
     with socket.socket() as sock: sock.bind(('127.0.0.1', 0)); return sock.getsockname()[1]
 driver_port, native_port = port(), port()
 url = f'http://127.0.0.1:{driver_port}'
-def request(method,path,data=None,timeout=30):
+def request(method,path,data=None,timeout=30,retry_read=False):
     body = None if data is None else json.dumps(data).encode()
     req=urllib.request.Request(url+path,data=body,method=method,headers={'Content-Type':'application/json'})
-    with opener.open(req,timeout=timeout) as response: result=json.load(response)['value']
+    # WebKitWebDriver can drop a connection while changing native window focus.
+    # Retry only explicitly idempotent reads/window selection, never IPC or writes.
+    for attempt in range(3 if retry_read else 1):
+        try:
+            with opener.open(req,timeout=timeout) as response: result=json.load(response)['value']
+            break
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, http.client.RemoteDisconnected, ConnectionError):
+            if not retry_read or attempt == 2: raise
+            time.sleep(.2 * (attempt + 1))
     if isinstance(result,dict) and 'error' in result: raise RuntimeError(result)
     return result
 def wait(callback,timeout=60):
@@ -94,9 +104,9 @@ with tempfile.TemporaryDirectory(prefix='native-controls-',dir=base) as temporar
         wait(lambda: request('GET','/status'))
         value=request('POST','/session',{'capabilities':{'alwaysMatch':{'tauri:options':{'application':str(application),'args':['--luna-home',str(runtime_home)]}}}},timeout=120)
         session=value['sessionId']; prefix='/session/'+session
-        def execute(script,args=None):return request('POST',prefix+'/execute/sync',{'script':script,'args':args or []})
-        def handles():return request('GET',prefix+'/window/handles')
-        def switch(handle):return request('POST',prefix+'/window',{'handle':handle})
+        def execute(script,args=None):return request('POST',prefix+'/execute/sync',{'script':script,'args':args or []},retry_read=True)
+        def handles():return request('GET',prefix+'/window/handles',retry_read=True)
+        def switch(handle):return request('POST',prefix+'/window',{'handle':handle},retry_read=True)
         def bootstrap():
             for handle in handles():
                 switch(handle)
@@ -162,6 +172,7 @@ with tempfile.TemporaryDirectory(prefix='native-controls-',dir=base) as temporar
         args.output.write_text(json.dumps(result,indent=2)+'\n')
         print(json.dumps(result,indent=2))
     finally:
+        print(json.dumps({'native_cleanup': {'launcher_pids': pids(), 'driver_exit': driver.poll()}}), file=sys.stderr)
         if session:
             try:request('DELETE','/session/'+session,timeout=10)
             except Exception:pass

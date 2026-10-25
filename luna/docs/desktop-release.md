@@ -163,7 +163,9 @@ update ([tauri#16062](https://github.com/tauri-apps/tauri/pull/16062)). Older
 bundling could crash before startup when bundled display libraries met newer host
 NVIDIA/Wayland drivers. Test the packaged AppImage as well as the debug executable.
 Linux CI starts Xvfb before the D-Bus session so activated services inherit DISPLAY,
-and retains native driver logs on failure.
+and retains native driver logs on failure. The acceptance helper retries transient
+WebDriver connection failures only for read operations and window selection; IPC
+and configuration writes are never replayed, and all assertions remain required.
 
 The release workflow uploads an attested **draft** after every platform passes.
 Publish that exact draft only after launching its packaged Linux installer on the
