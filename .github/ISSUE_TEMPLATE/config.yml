@@ -1,11 +1,8 @@
 blank_issues_enabled: true
 contact_links:
-  - name: 💬 Nous Research Discord
-    url: https://discord.gg/NousResearch
-    about: For quick questions, showcasing projects, sharing skills, and community chat.
-  - name: 📖 Documentation
-    url: https://github.com/NousResearch/hermes-agent/blob/main/README.md
-    about: Check the README and docs before opening an issue.
-  - name: 🤝 Contributing Guide
-    url: https://github.com/NousResearch/hermes-agent/blob/main/CONTRIBUTING.md
-    about: Read this before submitting a PR.
+  - name: Luna documentation
+    url: https://github.com/thesamehosuh/luna-harness/blob/main/README.md
+    about: Installation and release support details.
+  - name: Report a security vulnerability privately
+    url: https://github.com/thesamehosuh/luna-harness/security/advisories/new
+    about: Do not post credentials or vulnerability details in a public issue.
