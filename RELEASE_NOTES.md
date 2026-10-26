@@ -1,3 +1,10 @@
+# Luna 0.1.0-alpha.8
+
+- Reset stale context usage after deferred group-chat summaries commit, avoiding repeated compression notices.
+- Fix the Memory page's Honcho health-check request so it reaches the data-path verifier.
+- Save Telegram owner and group destinations from onboarding; refresh Honcho ports after Docker restarts.
+- Enable or stop Honcho from the Memory page.
+
 # Luna 0.1.0-alpha.7
 
 - Telegram setup now saves the owner DM as the notification home and binds the selected group.

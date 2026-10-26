@@ -231,6 +231,9 @@ async def test_turn_hold_keeps_admission_and_adopts_watermark_fenced_summary(
 
     adapter = _CaptureAdapter()
     runner = _build_runner(gateway_run, adapter, fake_db)
+    session_entry = runner.session_store.get_or_create_session.return_value
+    session_entry.last_prompt_tokens = 887_000
+    runner._run_agent.return_value["last_prompt_tokens"] = 887_000
 
     started = time.monotonic()
     result = await asyncio.wait_for(runner._handle_message(_make_event()), timeout=15)
@@ -264,6 +267,7 @@ async def test_turn_hold_keeps_admission_and_adopts_watermark_fenced_summary(
     assert fake_db.archive_and_compact.call_args.kwargs.get("watermark") == 6
 
     await _drain_deferred(runner)
+    await asyncio.sleep(0.05)  # allow the loop-thread anchor reset and SQLite mirror update
     await asyncio.wait_for(asyncio.to_thread(cleanup_done.wait, 5), timeout=6)
     FencedStreamingAgent.last_instance.close.assert_called_once()
 
@@ -271,6 +275,13 @@ async def test_turn_hold_keeps_admission_and_adopts_watermark_fenced_summary(
     # advances it (the deferral is not a failure).
     assert not fake_db.increment_hygiene_failure_streak.called
     assert fake_db.reset_hygiene_failure_streak.called
+    assert session_entry.last_prompt_tokens == 0, (
+        "a late committed compaction must clear the token count from the pre-compaction turn"
+    )
+    assert runner.session_store.update_session.call_args.args[0] == session_entry.session_key
+    assert runner.session_store.update_session.call_args.kwargs == {
+        "last_prompt_tokens": 0, "touch_activity": False,
+    }
     # Deferral notice still reaches the user.
     sent = [m["content"] for m in adapter.sent]
     assert any(

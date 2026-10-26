@@ -923,6 +923,27 @@ class GatewayTurnMixin:
             # comes from the durable compression lock. The done-callback records the flat retry-after
             # ONLY if the worker ends without committing anything.
             _sid, _skey, _agent = session_entry.session_id, session_key, attempt.agent
+            _loop = asyncio.get_running_loop()
+
+            def _reset_usage_anchor_after_commit():
+                # The live turn continues against the pre-compaction transcript while this worker
+                # runs in the background. Once its fenced commit lands, its API token count is no
+                # longer an estimate of the now-compacted transcript; reset the anchor so the next
+                # group message does not launch another summary from a stale hundreds-of-thousands
+                # token count.
+                if session_entry.session_id != _sid:
+                    return
+                session_entry.last_prompt_tokens = 0
+
+                async def _persist_reset():
+                    try:
+                        await self.async_session_store.update_session(
+                            _skey, last_prompt_tokens=0, touch_activity=False,
+                        )
+                    except Exception as _persist_err:
+                        logger.debug("hygiene usage anchor reset failed: %s", _persist_err)
+
+                asyncio.create_task(_persist_reset())
 
             def _hyg_adopt_or_space_retry(_fut, _gw=self, _sid=_sid, _skey=_skey, _agent=_agent):
                 try:
@@ -940,6 +961,10 @@ class GatewayTurnMixin:
                         "turn-hold was released — summary adopted at the watermark-fenced "
                         "commit boundary (#97963)", _sid,
                     )
+                    try:
+                        _loop.call_soon_threadsafe(_reset_usage_anchor_after_commit)
+                    except RuntimeError:
+                        logger.debug("hygiene usage anchor reset skipped: event loop is closed")
                     try:
                         _reset_hygiene_failure_streak(_gw, _skey)
                     except Exception as _rs_err:
