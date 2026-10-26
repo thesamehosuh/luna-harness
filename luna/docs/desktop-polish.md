@@ -55,7 +55,7 @@ canvas backgrounds and the native terminal's additional WebGL layer.
 Validation: dashboard typecheck/build and focused regression suites, launcher typecheck/lint/build,
 native Rust build and cancellation tests, Luna unit/component/contract/replay suite, and the bounded
 engine gateway contract subset. Native installation and connected-provider acceptance remain the
-next user test. No release was published as part of this polish.
+next user test. The operator approved publishing this pass as 0.1.0-alpha.4 after the release gates pass.
 
 Final regression totals (2026-10-26): 572 dashboard tests; 830 Luna tests with 2 skips;
 147 engine gateway contract tests; 31 native launcher tests with 1 pre-existing release-fixture skip.
