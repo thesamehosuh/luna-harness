@@ -24,12 +24,13 @@ Publisher steps:
 
 1. Set `luna-release.json` to a new version and push the reviewed source.
 2. Run **Luna desktop release** with `publish` enabled. Publication waits for the complete
-   reusable release checks plus every native/platform/data-path job.
+   reusable release checks plus every native/platform/data-path job. Use `publish_now` only when
+   the approved candidate should be published automatically after all checks pass.
 3. Alpha previews are explicitly unsigned. Complete OS signing/notarization with the publisher's
    identity before claiming a frictionless beginner installation on macOS/Windows.
 4. The workflow collects the exact tested files, verifies their runtime checksum, attests them,
-   uploads them to a draft prerelease. Launch the packaged Linux artifact on the acceptance
-   machine, then publish that exact draft after successful acceptance.
+   then creates a draft prerelease or publishes it automatically when `publish_now` is selected.
+   For a draft, launch the packaged Linux artifact on the acceptance machine before publishing it.
 5. Have a tester install the published artifact on a clean machine without developer tools or help.
 
 Developer-only equivalent:

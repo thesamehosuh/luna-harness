@@ -7,6 +7,11 @@ on:
         required: false
         type: boolean
         default: false
+      publish_now:
+        description: Publish the prerelease automatically after all security, runtime, and installer checks pass
+        required: false
+        type: boolean
+        default: false
       download_base:
         description: Optional HTTPS release-assets directory; defaults to this repo's versioned GitHub release
         required: false
@@ -169,7 +174,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.publish_now)
     needs: [release-checks, runtime, native]
     runs-on: ubuntu-latest
     permissions:
@@ -212,7 +217,13 @@ jobs:
       - name: Prepare draft alpha release
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_NOW: ${{ inputs.publish_now }}
         run: |
           version=$(python3 -c 'import json; print(json.load(open("luna-release.json"))["version"])')
-          gh release create "v$version" release-assets/* --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --title "Luna $version" --prerelease --draft --notes-file RELEASE_NOTES.md
+          if [[ "$PUBLISH_NOW" == "true" ]]; then
+            gh release create "v$version" release-assets/* --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "Luna $version" --prerelease --notes-file RELEASE_NOTES.md
+          else
+            gh release create "v$version" release-assets/* --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "Luna $version" --prerelease --draft --notes-file RELEASE_NOTES.md
+          fi
