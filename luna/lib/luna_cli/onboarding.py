@@ -19,6 +19,7 @@ import re
 import secrets
 import sqlite3
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -105,6 +106,32 @@ def set_choice(step: str, choice: str) -> Dict[str, Any]:
         from luna_core.managed_memory import disable
         disable()
     return step_report()
+
+
+def set_memory_service(enabled: bool, timeout: int = 180) -> Dict[str, Any]:
+    """Toggle Honcho from the dashboard, reusing an existing stack when available."""
+    if not enabled:
+        set_choice("honcho", "skipped")
+        from luna_core.managed_memory import status
+        return {"ok": True, "enabled": False, "progress": status()}
+
+    set_choice("honcho", "enabled")
+    stack = tune._home() / "honcho"
+    if (stack / ".embedding-contract.json").is_file():
+        from luna_core.managed_memory import restore, status
+        restore()
+        deadline = time.monotonic() + max(30, min(int(timeout), 600))
+        while time.monotonic() < deadline:
+            if _probe_health(_honcho_base_url()):
+                return {"ok": True, "enabled": True, "progress": status()}
+            time.sleep(1)
+        progress = status()
+        return {"ok": False, "enabled": True,
+                "detail": "Honcho did not become healthy. Check the Memory setup status and retry.",
+                "progress": progress}
+
+    result = honcho_up(timeout)
+    return {**result, "enabled": bool(result.get("ok"))}
 
 
 def check_provider() -> Dict[str, Any]:

@@ -129,6 +129,11 @@ class HonchoUpRequest(BaseModel):
     timeout: int = Field(180, ge=30, le=600)
 
 
+class MemoryServiceRequest(BaseModel):
+    enabled: bool
+    timeout: int = Field(180, ge=30, le=600)
+
+
 class SoulSection(BaseModel):
     title: str
     body: str = ""
@@ -469,6 +474,18 @@ async def get_memory_progress():
 async def get_memory_settings():
     from luna_cli.memory_settings import report
     return await asyncio.to_thread(report)
+
+
+@router.post("/memory/service")
+async def post_memory_service(body: MemoryServiceRequest):
+    _rate_limit("honcho_up")
+    try:
+        result = await asyncio.to_thread(onboarding.set_memory_service, body.enabled, body.timeout)
+    except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+    if not result.get("ok"):
+        raise HTTPException(status_code=503, detail=result.get("detail", "Honcho could not be started."))
+    return result
 
 
 @router.get("/desktop/identity")

@@ -4,6 +4,7 @@
 - Pairing setup applies the verified owner ID, without guessing from message text.
 - Repair same-indent YAML list updates so saved Telegram access lists do not retain stale entries.
 - Refresh Honcho's loopback database port after Docker restarts so memory starts with Luna.
+- Enable or stop Honcho from the Memory page without opening Setup.
 
 # Luna 0.1.0-alpha.6
 

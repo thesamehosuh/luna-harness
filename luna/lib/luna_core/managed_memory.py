@@ -100,6 +100,8 @@ def restore():
 def disable():
     """Stop only an enabled managed stack. A fresh skip performs no Docker operation."""
     stack = home() / "honcho"
+    with _restore_lock:
+        _restores.pop(str(home().resolve()), None)
     if not (stack / ".embedding-contract.json").is_file(): return
     from luna_core import memory_worker
     from luna_core.data_ops import compose_command

@@ -188,6 +188,26 @@ def test_managed_memory_refresh_keeps_database_passwords(home, monkeypatch):
     assert "LUNA_EMBEDDING_API_KEY='second-synthetic'" in after
 
 
+def test_memory_service_toggle_reuses_existing_stack(home, monkeypatch):
+    from luna_core import managed_memory
+    stack = home / "honcho"
+    stack.mkdir()
+    (stack / ".embedding-contract.json").write_text("{}")
+    calls = []
+    monkeypatch.setattr(onboarding, "set_choice", lambda *args: calls.append(("choice", *args)))
+    monkeypatch.setattr(managed_memory, "restore", lambda: calls.append(("restore",)))
+    monkeypatch.setattr(managed_memory, "status", lambda: {"stage": "ready"})
+    monkeypatch.setattr(onboarding, "_probe_health", lambda _url: True)
+    started = onboarding.set_memory_service(True)
+    assert started["ok"] is True and started["enabled"] is True
+    assert calls == [("choice", "honcho", "enabled"), ("restore",)]
+
+    calls.clear()
+    stopped = onboarding.set_memory_service(False)
+    assert stopped["ok"] is True and stopped["enabled"] is False
+    assert calls == [("choice", "honcho", "skipped")]
+
+
 def test_wake_test_uses_configured_room_register(home):
     from luna_core.cascade import Candidate, CascadeConfig, build_state
 
