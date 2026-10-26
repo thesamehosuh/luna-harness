@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, Plus, RefreshCw, Save, Trash2, Upload } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { Link } from "react-router";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { ConfirmDialog } from "@nous-research/ui/ui/components/confirm-dialog";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { H2 } from "@/components/ui/h2";
@@ -83,8 +84,6 @@ export default function CharacterPage() {
   const [sections, setSections] = useState<SoulSection[]>([]);
   const [footer, setFooter] = useState("");
   const [output, setOutput] = useState({ emoji_filter: true, strip_emoji: false, allowed_emoji: "", max_lines: 4, max_chars: 1200, language: "auto", style_filter: false, sentence_breaks: true });
-  const [skin, setSkin] = useState("default");
-  const [skinColors, setSkinColors] = useState<Record<string, string>>({});
   const [autoLoad, setAutoLoad] = useState<string[]>([]);
   const [presetId, setPresetId] = useState("generic");
   const [sample, setSample] = useState("I am SO happy about this 😭 and 😡!!!\nthis should wrap a bit.");
@@ -108,8 +107,6 @@ export default function CharacterPage() {
     setSections(b.soul.sections.map((s) => ({ ...s })));
     setFooter(b.soul.footer);
     setOutput(outputDraftOf(b.output));
-    setSkin(b.current_skin);
-    setSkinColors({ ...b.skins.find((s) => s.name === b.current_skin)?.colors });
     setAutoLoad([...b.auto_load]);
   }, []);
 
@@ -233,43 +230,6 @@ export default function CharacterPage() {
     }
   };
 
-  const saveSkin = async (name: string) => {
-    if (writing.current) return;
-    writing.current = true;
-    setBusy("skin");
-    try {
-      const res = await lunaApi.saveCharacter({ skin: name }, bundle?.revision);
-      setBundle(res.bundle);
-      setSkin(res.bundle.current_skin);
-      setSkinColors({ ...res.bundle.skins.find((s) => s.name === res.bundle.current_skin)?.colors });
-      showToast(`Skin set: ${name}`, "success");
-    } catch (e) {
-      showToast(errorMessage(e), "error");
-    } finally {
-      writing.current = false;
-      setBusy(null);
-    }
-  };
-
-  const saveColors = async (): Promise<boolean> => {
-    if (!activeSkin || writing.current) return false;
-    writing.current = true;
-    setBusy("colors");
-    try {
-      const res = await lunaApi.saveSkinColors(activeSkin.name, skinColors, activeSkin.description);
-      setBundle(res.bundle);
-      setSkinColors({ ...res.bundle.skins.find((s) => s.name === activeSkin.name)?.colors });
-      showToast(`Skin ${activeSkin.name} saved`, "success");
-      return true;
-    } catch (e) {
-      showToast(errorMessage(e), "error");
-      return false;
-    } finally {
-      writing.current = false;
-      setBusy(null);
-    }
-  };
-
   const toggleSkill = async (name: string, on: boolean) => {
     if (writing.current) return;
     writing.current = true;
@@ -346,18 +306,7 @@ export default function CharacterPage() {
     setFooter(next.footer);
   }
 
-  const swatches = useMemo(() => {
-    const colors = bundle?.skins.find((s) => s.name === skin)?.colors ?? {};
-    return Object.entries(colors).slice(0, 12);
-  }, [bundle, skin]);
-
-  const activeSkin = useMemo(
-    () => bundle?.skins.find((s) => s.name === skin) ?? null,
-    [bundle, skin],
-  );
-
   const outputBaseline = bundle ? outputDraftOf(bundle.output) : null;
-  const colorsDirty = !!activeSkin && !activeSkin.builtin && isDraftDirty(skinColors, activeSkin.colors);
 
   useUnsavedChanges({
     id: "character-output",
@@ -366,14 +315,6 @@ export default function CharacterPage() {
     onSave: saveOutput,
     onDiscard: () => { if (outputBaseline) setOutput(outputBaseline); },
   });
-  useUnsavedChanges({
-    id: "character-colors",
-    label: "skin colors",
-    dirty: colorsDirty,
-    onSave: saveColors,
-    onDiscard: () => { if (activeSkin) setSkinColors({ ...activeSkin.colors }); },
-  });
-
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   /**
@@ -435,7 +376,8 @@ export default function CharacterPage() {
         <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
             <H2 className="max-w-md text-3xl font-normal lg:text-4xl">Give your companion a voice.</H2>
-            <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">Shape their personality, set their boundaries, and make a little space in your chats feel like home.</p>
+            <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">Edit personality, reply style and skills.</p>
+            <Link to="/controls#preferences" className="mt-3 inline-block text-sm text-primary hover:underline">Chat appearance →</Link>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button outlined size="sm" onClick={exportSoul} title="Download persona text as SOUL.md; export settings from Profiles"><Download className="mr-1 h-3.5 w-3.5" /> Export persona</Button>
@@ -444,8 +386,8 @@ export default function CharacterPage() {
         </div>
       </header>
 
-      <nav aria-label="Character settings sections" className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto border-y border-border bg-background/90 px-4 py-2 backdrop-blur sm:gap-2 md:-mx-6 md:px-6">
-        {[["persona", "Persona"], ["boundaries", "Boundaries"], ["appearance", "Appearance"], ["skills", "Skills"]].map(([id, label]) => <a key={id} href={`#character-${id}`} className="shrink-0 rounded-full px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:px-4">{label}</a>)}
+      <nav aria-label="Character settings sections" className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto border-y border-border bg-background-base px-4 py-2 sm:gap-2 md:-mx-6 md:px-6">
+        {[["persona", "Persona"], ["boundaries", "Boundaries"], ["skills", "Skills"]].map(([id, label]) => <a key={id} href={`#character-${id}`} className="shrink-0 rounded-full px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:px-4">{label}</a>)}
       </nav>
 
       <section id="character-persona" className="scroll-mt-20 space-y-4">
@@ -453,13 +395,8 @@ export default function CharacterPage() {
         <CardContent className="py-3">
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <div className="min-w-48"><H2 className="text-base">Start with a voice</H2><p className="mt-1 text-xs text-muted-foreground">Choose a starting point, then make it yours.</p></div>
-            <select className={`${inputClass} min-w-48`} value={presetId} onChange={(e) => setPresetId(e.target.value)} aria-label="Persona preset">
-              {(bundle?.presets ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <Select className="min-w-48 md:max-w-64" label="Persona preset" value={presetId} onValueChange={setPresetId}
+              options={(bundle?.presets ?? []).map(preset => ({ value: preset.id, label: preset.name }))} />
             <Button
               size="sm"
               onClick={() => {
@@ -627,69 +564,6 @@ export default function CharacterPage() {
           <Button size="sm" className="mt-5" onClick={saveOutput} disabled={busy === "output"}>
             Save hard limits
           </Button>
-        </CardContent>
-      </Card>
-      </section>
-
-      <section id="character-appearance" className="scroll-mt-20">
-      <Card className="rounded-2xl border-border shadow-sm">
-        <CardContent className="p-5 md:p-6">
-          <H2 className="text-lg">Appearance</H2>
-          <p className="mt-1 text-sm text-muted-foreground">Choose your companion’s chat colors. Use the theme picker in the sidebar to change the dashboard’s appearance.</p>
-          <div className="flex flex-wrap gap-2 pt-2">
-            {(bundle?.skins ?? []).map((s) => (
-              <button
-                key={s.name}
-                className={`rounded-xl border px-4 py-2.5 text-sm transition-colors ${skin === s.name ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted/60"}`}
-                onClick={() => {
-                  if (s.name === skin) return;
-                  if (colorsDirty) requestLeave(() => void saveSkin(s.name));
-                  else void saveSkin(s.name);
-                }}
-                disabled={busy === "skin"}
-              >
-                {s.name}
-                {skin === s.name && <Badge className="ml-2">active</Badge>}
-              </button>
-            ))}
-          </div>
-          {!!swatches.length && (
-            <div className="flex gap-1 pt-3" aria-label="Selected palette colors">
-              {swatches.map(([key, value]) => (
-                <span key={key} className="h-5 w-5 rounded" style={{ background: value }} title={`${key}: ${value}`} />
-              ))}
-            </div>
-          )}
-          {activeSkin && !activeSkin.builtin && (
-            <div className="pt-4">
-              <H2 className="text-base">Edit {activeSkin.name}</H2>
-              <p className="text-xs text-muted-foreground">
-                Colors you leave out are inherited from the built-in default skin.
-              </p>
-              <div className="grid max-w-2xl grid-cols-1 gap-2 pt-2">
-                {Object.entries(skinColors).map(([key, value]) => (
-                  <div key={key} className="flex flex-wrap items-center gap-2 text-sm sm:flex-nowrap">
-                    <span className="w-full shrink-0 font-mono text-xs sm:w-48">{key}</span>
-                    <input
-                      type="color"
-                      className="h-8 w-10 cursor-pointer rounded border bg-transparent"
-                      value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
-                      onChange={(e) => setSkinColors({ ...skinColors, [key]: e.target.value })}
-                      aria-label={`${key} color`}
-                    />
-                    <input
-                className={`${inputClass} w-40 font-mono`}
-                      value={value}
-                      onChange={(e) => setSkinColors({ ...skinColors, [key]: e.target.value })}
-                    />
-                  </div>
-                ))}
-              </div>
-              <Button size="sm" className="mt-3" onClick={saveColors} disabled={busy === "colors"}>
-                Save skin
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
       </section>

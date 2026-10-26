@@ -19,9 +19,11 @@ export interface OnboardingReport {
 }
 
 export interface PersonaPreset {
+  is_current?: boolean;
   id: string;
   name: string;
   description: string;
+  sample?: string;
   content: string;
 }
 

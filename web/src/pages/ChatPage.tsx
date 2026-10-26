@@ -23,17 +23,15 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { Button } from "@/components/ui/Button";
-import { Typography } from "@/components/ui/Typography";
 import { cn } from "@/lib/utils";
-import { Copy, PanelRight, RotateCcw, X } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Check, Copy, MessageSquarePlus, PanelRight, RotateCcw, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { ChatSessionList } from "@/components/ChatSessionList";
 import { usePageHeader } from "@/contexts/usePageHeader";
-import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { latchChatActivation } from "@/lib/chat-activation";
 import { copyTextToClipboard } from "@/lib/clipboard";
@@ -178,17 +176,12 @@ function terminalTierWidthPx(host: HTMLElement | null): number {
 }
 
 function terminalFontSizeForWidth(layoutWidthPx: number): number {
-  if (layoutWidthPx < 300) return 7;
-  if (layoutWidthPx < 360) return 8;
-  if (layoutWidthPx < 420) return 9;
-  if (layoutWidthPx < 520) return 10;
-  if (layoutWidthPx < 720) return 11;
-  if (layoutWidthPx < 1024) return 12;
-  return 14;
+  // Wrap text to the available columns; never shrink it to fit more chrome.
+  return layoutWidthPx < 520 ? 13 : 14;
 }
 
-function terminalLineHeightForWidth(layoutWidthPx: number): number {
-  return layoutWidthPx < 1024 ? 1.02 : 1.15;
+function terminalLineHeight(): number {
+  return 1.4;
 }
 
 export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
@@ -253,7 +246,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // server could not start it at all (close 1011; the reason is in the terminal).
   const [endedReason, setEndedReason] = useState<"exited" | "start-failed">("exited");
   const navigate = useNavigate();
-  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+  const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "failed">("idle");
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -352,13 +345,14 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // /chat re-runs the effect (derived flips back to true) and re-locks.
   // Keying on the raw state would leak the body.overflow="hidden" across
   // tabs because the dep wouldn't change on tab switch.
+  const mobilePanelRef = useRef<HTMLElement>(null);
   const [mobilePanelOpenRaw, setMobilePanelOpenRaw] = useState(false);
   const mobilePanelOpen = isActive && mobilePanelOpenRaw;
 
   // Collapse toggle for the desktop chat side panel (model + sessions),
   // persisted in localStorage so the choice survives reloads.
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(
-    () => localStorage.getItem("hermes-chat-panel-collapsed") === "1",
+    () => localStorage.getItem("hermes-chat-panel-collapsed") !== "0",
   );
   const toggleChatPanel = useCallback(() => {
     setChatPanelCollapsed((prev) => {
@@ -367,17 +361,12 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       return next;
     });
   }, []);
-  const { setEnd, setTitle } = usePageHeader();
+  const { setTitle } = usePageHeader();
   const [sessionTitleState, setSessionTitleState] = useState<{
     scope: string;
     title: string | null;
   }>({ scope: "", title: null });
-  const { t } = useI18n();
   const closeMobilePanel = useCallback(() => setMobilePanelOpenRaw(false), []);
-  const modelToolsLabel = useMemo(
-    () => `${t.app.modelToolsSheetTitle} ${t.app.modelToolsSheetSubtitle}`,
-    [t.app.modelToolsSheetSubtitle, t.app.modelToolsSheetTitle],
-  );
   const [portalRoot] = useState<HTMLElement | null>(() =>
     typeof document !== "undefined" ? document.body : null,
   );
@@ -483,8 +472,19 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
   useEffect(() => {
     if (!mobilePanelOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const panel = mobilePanelRef.current;
+    const focusable = () => Array.from(panel?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]') ?? []);
+    focusable()[0]?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeMobilePanel();
+      if (e.key === "Tab") {
+        const items = focusable();
+        const first = items[0];
+        const last = items.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
     };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
@@ -492,6 +492,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
+      previousFocus?.focus();
     };
   }, [mobilePanelOpen, closeMobilePanel]);
 
@@ -504,54 +505,38 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
-  useLayoutEffect(() => {
-    // When hidden (non-chat tab) another page owns the header's end slot.
-    // Don't touch it AT ALL — the persistent chat host mounts (plugin
-    // manifests resolving) and updates AFTER the routed page's layout
-    // effect has already filled the slot, so even a "defensive"
-    // setEnd(null) here wipes that page's header buttons (Cron "Create",
-    // Profiles "Build", …). Ownership rule: only write to the slot while
-    // /chat is the active route AND the narrow layout needs the button;
-    // the effect cleanup handles removal on every transition out.
-    if (!isActive || !narrow) return;
-    setEnd(
-      <Button
-        ghost
-        onClick={() => setMobilePanelOpenRaw(true)}
-        aria-expanded={mobilePanelOpen}
-        aria-controls="chat-side-panel"
-        className={cn(
-          "shrink-0 rounded border border-current/20",
-          "px-2 py-1 text-xs font-medium tracking-wide",
-          "text-text-secondary hover:text-midground hover:bg-midground/5",
-        )}
-      >
-        <span className="inline-flex items-center gap-1.5">
-          <PanelRight className="h-3 w-3 shrink-0" />
-          {modelToolsLabel}
-        </span>
-      </Button>,
-    );
-    return () => setEnd(null);
-  }, [isActive, narrow, mobilePanelOpen, modelToolsLabel, setEnd]);
+  const [liveSession, setLiveSession] = useState({ channel: "", id: "" });
+  const [response, setResponse] = useState({ channel: "", text: "" });
+  const responseRevision = useRef(0);
+  const activeSessionId = liveSession.channel === channel ? liveSession.id || resumeParam : resumeParam;
+  const lastResponse = response.channel === channel ? response.text : "";
+  const handleSessionIdChange = useCallback((id: string) => {
+    setLiveSession(previous => previous.channel === channel && previous.id === id ? previous : { channel, id });
+  }, [channel]);
+  const handleAssistantResponse = useCallback((text: string) => {
+    responseRevision.current += 1;
+    setResponse({ channel, text });
+  }, [channel]);
 
-  const handleCopyLast = () => {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    // Send the slash as a burst, wait long enough for Ink's tokenizer to
-    // emit a keypress event for each character (not coalesce them into a
-    // paste), then send Return as its own event.  The timing here is
-    // empirical — 100ms is safely past Node's default stdin coalescing
-    // window and well inside UI responsiveness.
-    ws.send("/copy");
-    setTimeout(() => {
-      const s = wsRef.current;
-      if (s && s.readyState === WebSocket.OPEN) s.send("\r");
-    }, 100);
-    setCopyState("copied");
+  useEffect(() => {
+    if (!activeSessionId) return;
+    let disposed = false;
+    const revision = responseRevision.current;
+    api.getSessionMessages(activeSessionId, scopedProfile).then(result => {
+      if (disposed || revision !== responseRevision.current) return;
+      const last = [...result.messages].reverse().find(message => message.role === "assistant" && message.content?.trim());
+      setResponse({ channel, text: last?.content || "" });
+    }).catch(() => { /* live turn events can still supply the response */ });
+    return () => { disposed = true; };
+  }, [activeSessionId, channel, scopedProfile]);
+
+  const handleCopyLast = async () => {
+    if (!lastResponse) return;
+    setCopyState("copying");
+    const copied = await copyTextToClipboard(lastResponse);
+    setCopyState(copied ? "copied" : "failed");
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
-    copyResetRef.current = setTimeout(() => setCopyState("idle"), 1500);
-    termRef.current?.focus();
+    copyResetRef.current = setTimeout(() => setCopyState("idle"), 2500);
   };
 
   useEffect(() => {
@@ -583,7 +568,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       fontFamily:
         "'JetBrains Mono', 'Cascadia Mono', 'Fira Code', 'MesloLGS NF', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace",
       fontSize: terminalFontSizeForWidth(tierW0),
-      lineHeight: terminalLineHeightForWidth(tierW0),
+      lineHeight: terminalLineHeight(),
       letterSpacing: 0,
       fontWeight: "400",
       fontWeightBold: "700",
@@ -936,7 +921,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     // than `fontSize` suggests — users see "huge" text even at 7–9px settings.
     // The canvas/DOM renderer tracks `fontSize` faithfully; use it for narrow
     // hosts.  Wide layouts still get WebGL for crisp box-drawing.
-    const useWebgl = terminalTierWidthPx(host) >= 768;
+    const useWebgl = !("__TAURI_INTERNALS__" in window) && terminalTierWidthPx(host) >= 768;
     if (useWebgl) {
       try {
         const webgl = new WebglAddon();
@@ -986,7 +971,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       }
       const w = terminalTierWidthPx(host);
       const nextSize = terminalFontSizeForWidth(w);
-      const nextLh = terminalLineHeightForWidth(w);
+      const nextLh = terminalLineHeight();
       const fontChanged =
         term.options.fontSize !== nextSize ||
         term.options.lineHeight !== nextLh;
@@ -1784,327 +1769,45 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     term.options.theme = terminalTheme;
   }, [terminalTheme]);
 
-  // Layout:
-  //   outer flex column — sits inside the dashboard's content area
-  //   row split — terminal pane (flex-1) + sidebar (fixed width, lg+)
-  //   terminal wrapper — rounded, dark, padded — the "terminal window"
-  //   floating copy button — bottom-right corner, transparent with a
-  //     subtle border; stays out of the way until hovered.  Sends
-  //     `/copy\n` to Ink, which emits OSC 52 → our clipboard handler.
-  //   sidebar — ChatSidebar opens its own JSON-RPC sidecar; renders
-  //     model badge, tool-call list, model picker. Best-effort: if the
-  //     sidecar fails to connect the terminal pane keeps working.
-  //
-  // Mobile model/tools sheet is portaled to `document.body` so it stacks
-  // above the app sidebar (`z-50`) and mobile chrome (`z-40`).  The main
-  // dashboard column uses `relative z-2`, which traps `position:fixed`
-  // descendants below those layers (see Toast.tsx).
-  const reconnectBanner =
-    ptyState === "reconnecting" ? PTY_RECONNECTING_BANNER : null;
+  const reconnectBanner = ptyState === "reconnecting" ? PTY_RECONNECTING_BANNER : null;
   const visibleBanner = banner ?? reconnectBanner;
-  const showReconnectOverlay =
-    ptyState === "reconnecting" || (ptyState === "closed" && !banner);
-  const showResumeLoadingOverlay = shouldShowResumeLoadingOverlay({
-    hasResumeTarget: Boolean(resumeParam),
-    ptyState,
-    hydrating: resumeHydrating,
-  });
-  const mobileModelToolsPortal =
-    isActive &&
-    narrow &&
-    portalRoot &&
-    createPortal(
-      <>
-        {mobilePanelOpen && (
-          <Button
-            ghost
-            aria-label={t.app.closeModelTools}
-            onClick={closeMobilePanel}
-            className={cn(
-              "fixed inset-0 z-[55] p-0 block",
-              "bg-black/60",
-            )}
-          />
-        )}
-
-        <div
-          id="chat-side-panel"
-          role="complementary"
-          aria-label={modelToolsLabel}
-          className={cn(
-            "font-mondwest fixed top-0 right-0 z-[60] flex h-dvh max-h-dvh w-64 min-w-0 flex-col antialiased",
-            "border-l border-current/20 text-midground",
-            "bg-background-base/95",
-            "transition-transform duration-200 ease-out",
-            "[background:var(--component-sidebar-background,var(--background-base))]",
-            "[clip-path:var(--component-sidebar-clip-path)]",
-            "[border-image:var(--component-sidebar-border-image)]",
-            mobilePanelOpen
-              ? "translate-x-0"
-              : "pointer-events-none translate-x-full",
-          )}
-        >
-          <div
-            className={cn(
-              "flex h-14 shrink-0 items-center justify-between gap-2 border-b border-current/20 px-5",
-            )}
-          >
-            <Typography
-              mondwest
-              className="text-display font-bold text-[1.125rem] leading-[0.95] tracking-[0.0525rem] text-midground"
-            >
-              {t.app.modelToolsSheetTitle}
-              <br />
-              {t.app.modelToolsSheetSubtitle}
-            </Typography>
-
-            <Button
-              ghost
-              size="icon"
-              onClick={closeMobilePanel}
-              aria-label={t.app.closeModelTools}
-              className="text-text-secondary hover:text-midground"
-            >
-              <X />
-            </Button>
-          </div>
-
-          <div
-            className={cn(
-              "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
-              "border-t border-current/10",
-            )}
-          >
-            <div className="border-b border-current/10 px-1 py-2">
-              <ChatSidebar
-                channel={channel}
-                profile={scopedProfile}
-                onDashboardNewSessionRequest={startFreshDashboardChat}
-                onSessionTitleChange={handleSessionTitleChange}
-              />
-            </div>
-            <ChatSessionList
-              activeSessionId={resumeParam}
-              profile={scopedProfile}
-              onPicked={closeMobilePanel}
-              onNewChat={startFreshDashboardChat}
-            />
-          </div>
-        </div>
-      </>,
-      portalRoot,
-    );
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <PluginSlot name="chat:top" />
-      {mobileModelToolsPortal}
-
-      {visibleBanner && (
-        <div
-          role="alert"
-          className="rounded-panel flex flex-wrap items-center gap-2 border border-warning/50 bg-warning/10 text-warning px-3 py-2 text-xs tracking-wide"
-        >
-          <span className="min-w-0 flex-1">{visibleBanner}</span>
-          {banner && bannerAction === "reload" && (
-            <Button size="sm" outlined onClick={() => window.location.reload()}>
-              Reload page
-            </Button>
-          )}
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3">
-        <div
-          ref={termWrapRef}
-          className={cn(
-            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg",
-            "p-2 sm:p-3",
-          )}
-          style={{
-            backgroundColor: terminalBg,
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
-          }}
-        >
-          <div
-            ref={hostRef}
-            className="hermes-chat-xterm-host min-h-0 min-w-0 flex-1"
-          />
-
-          {showReconnectOverlay && (
-            <div className="absolute inset-x-3 top-3 z-20 flex justify-center sm:inset-x-auto sm:right-3 sm:justify-end">
-              <div className="rounded-panel flex max-w-[min(28rem,calc(100vw-3rem))] flex-col items-start gap-2 border border-warning/60 bg-black/80 px-3 py-2 text-xs text-warning shadow-lg">
-                <div className="tracking-wide">
-                  {ptyState === "reconnecting"
-                    ? "Chat is reconnecting."
-                    : reconnectGaveUp
-                      ? PTY_GAVE_UP_BANNER.text
-                      : "Chat disconnected."}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    outlined
-                    onClick={reconnectPty}
-                    prefix={<RotateCcw className="h-4 w-4" />}
-                    aria-label="Reconnect chat"
-                  >
-                    Reconnect now
-                  </Button>
-                  {ptyState === "closed" && reconnectGaveUp && (
-                    <Button
-                      size="sm"
-                      ghost
-                      onClick={() => navigate("/system")}
-                      aria-label="Check server status"
-                    >
-                      Check server status
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {showResumeLoadingOverlay && (
-            <div
-              className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
-              role="status"
-              aria-live="polite"
-              aria-label={PTY_RESUME_LOADING_MESSAGE}
-            >
-              <div className="rounded-panel max-w-[min(28rem,calc(100vw-3rem))] border border-current/30 bg-black/80 px-4 py-3 text-center text-xs tracking-wide text-white/85 shadow-lg">
-                {PTY_RESUME_LOADING_MESSAGE}
-              </div>
-            </div>
-          )}
-
-          {/* NS-504: the agent process exited (e.g. `/exit` or a new session).
-              Offer an in-place restart so the user never has to refresh the
-              whole page to get a working chat back. */}
-          {ptyState === "ended" && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/60">
-              <div className="max-w-[min(32rem,calc(100vw-3rem))] text-center text-sm tracking-wide text-white/80">
-                {endedReason === "start-failed"
-                  ? PTY_START_FAILED_MESSAGE
-                  : PTY_SESSION_ENDED_MESSAGE}
-              </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button
-                  onClick={startFreshPty}
-                  prefix={<RotateCcw className="h-4 w-4" />}
-                  aria-label="Start a new chat session"
-                >
-                  Start new session
-                </Button>
-                {endedReason === "exited" && (
-                  <Button
-                    outlined
-                    onClick={() => navigate("/logs")}
-                    aria-label="Open logs"
-                  >
-                    Open logs
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-
-          <Button
-            ghost
-            onClick={handleCopyLast}
-            title="Copy last assistant response as raw markdown"
-            aria-label="Copy last assistant response"
-            className={cn(
-              "absolute z-10",
-              "normal-case tracking-normal font-normal",
-              "rounded border border-current/30",
-              "bg-black/20",
-              "opacity-70 hover:opacity-100 hover:border-current/60",
-              "transition-opacity duration-150",
-              "bottom-2 right-2 px-2 py-1 text-xs sm:bottom-3 sm:right-3 sm:px-2.5 sm:py-1.5",
-              "lg:bottom-4 lg:right-4",
-            )}
-            style={{ color: terminalFg }}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Copy className="h-3 w-3 shrink-0" />
-              <span className="hidden min-[400px]:inline tracking-wide">
-                {copyState === "copied" ? "copied" : "copy last response"}
-              </span>
-            </span>
-          </Button>
-
-          {chatPanelCollapsed && (
-            <Button
-              ghost
-              onClick={toggleChatPanel}
-              title="Show side panel (model + sessions)"
-              aria-label="Show chat side panel"
-              className={cn(
-                "absolute z-10",
-                "normal-case tracking-normal font-normal",
-                "rounded border border-current/30",
-                "bg-black/20",
-                "opacity-70 hover:opacity-100 hover:border-current/60",
-                "transition-opacity duration-150",
-                "top-2 right-2 px-2 py-1 text-xs sm:top-3 sm:right-3",
-              )}
-              style={{ color: terminalFg }}
-            >
-              <span className="inline-flex items-center gap-1">
-                <PanelRight className="h-3 w-3 shrink-0" />
-                <span className="hidden min-[400px]:inline tracking-wide">
-                  panel
-                </span>
-              </span>
-            </Button>
-          )}
-        </div>
-
-        {!narrow && !chatPanelCollapsed && (
-          <div
-            id="chat-side-panel"
-            role="complementary"
-            aria-label={modelToolsLabel}
-            className="flex min-h-0 shrink-0 flex-col gap-3 overflow-hidden lg:h-full lg:w-60"
-          >
-            <div className="flex h-8 shrink-0 items-center justify-end pr-1">
-              <Button
-                ghost
-                size="icon"
-                onClick={toggleChatPanel}
-                aria-label="Collapse chat side panel"
-                title="Collapse side panel"
-                className="text-text-secondary hover:text-midground"
-              >
-                <X />
-              </Button>
-            </div>
-            {/* Model picker — keeps the rail thin. */}
-            <div className="shrink-0">
-              <ChatSidebar
-                channel={channel}
-                profile={scopedProfile}
-                onDashboardNewSessionRequest={startFreshDashboardChat}
-                onSessionTitleChange={handleSessionTitleChange}
-              />
-            </div>
-
-            {/* Session switcher fills the remaining height below the model box. */}
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <ChatSessionList
-                activeSessionId={resumeParam}
-                profile={scopedProfile}
-                onNewChat={startFreshDashboardChat}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-      <PluginSlot name="chat:bottom" />
-    </div>
+  const showReconnectOverlay = ptyState === "reconnecting" || (ptyState === "closed" && !banner);
+  const showResumeLoadingOverlay = shouldShowResumeLoadingOverlay({ hasResumeTarget: Boolean(resumeParam), ptyState, hydrating: resumeHydrating });
+  const sessionList = <ChatSessionList activeSessionId={activeSessionId} profile={scopedProfile} onPicked={closeMobilePanel} onNewChat={startFreshDashboardChat} />;
+  const mobilePortal = isActive && narrow && mobilePanelOpen && portalRoot && createPortal(
+    <div className="fixed inset-0 z-[60] flex justify-end">
+      <button type="button" aria-label="Close conversations" className="absolute inset-0 bg-black/40" onClick={closeMobilePanel} />
+      <section ref={mobilePanelRef} role="dialog" aria-modal="true" aria-label="Conversations" className="relative flex h-full w-[min(340px,90vw)] flex-col border-l border-border bg-background-base p-4">
+        <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Conversations</h2><Button ghost size="icon" aria-label="Close conversations" onClick={closeMobilePanel}><X /></Button></div>
+        {sessionList}
+      </section>
+    </div>, portalRoot,
   );
+
+  return <div className="luna-chat flex min-h-0 flex-1 flex-col">
+    <PluginSlot name="chat:top" />
+    {mobilePortal}
+    <div className="chat-heading">
+      <div className="min-w-0 flex-1"><h1 className="truncate font-display text-2xl">{sessionTitle || "Chat"}</h1><p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><span className={cn("size-1.5 rounded-full", ptyState === "open" ? "bg-success" : "bg-warning")} />{ptyState === "open" ? "Connected" : ptyState === "connecting" ? "Starting chat…" : "Connection interrupted"}</p></div>
+      <Button outlined size="sm" onClick={startFreshDashboardChat} prefix={<MessageSquarePlus />}>New chat</Button>
+      <Button ghost size="icon" aria-label={narrow ? "Show conversations" : chatPanelCollapsed ? "Show chat side panel" : "Collapse chat side panel"} aria-expanded={narrow ? mobilePanelOpen : !chatPanelCollapsed} onClick={narrow ? () => setMobilePanelOpenRaw(true) : toggleChatPanel}><PanelRight /></Button>
+    </div>
+    <div className="chat-toolbar">
+      <ChatSidebar channel={channel} profile={scopedProfile} isActive={isActive} onDashboardNewSessionRequest={startFreshDashboardChat} onSessionTitleChange={handleSessionTitleChange} onSessionIdChange={handleSessionIdChange} onAssistantResponse={handleAssistantResponse} />
+      <Button ghost size="sm" disabled={!lastResponse || copyState === "copying"} onClick={() => void handleCopyLast()} aria-label="Copy last assistant response" title="Copy last response" className="chat-copy-button" prefix={copyState === "copied" ? <Check /> : <Copy />}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy"}</Button>
+    </div>
+    {visibleBanner && <div role="alert" className="mx-1 mt-2 flex flex-wrap items-center gap-3 rounded-control border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"><span className="min-w-0 flex-1">{visibleBanner}</span>{banner && bannerAction === "reload" && <Button size="sm" outlined onClick={() => window.location.reload()}>Reload page</Button>}</div>}
+    <div className="flex min-h-0 flex-1 gap-5 pt-4">
+      <div ref={termWrapRef} className="chat-canvas relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" style={{ backgroundColor: terminalBg, "--chat-background": terminalBg } as import("react").CSSProperties}>
+        <div ref={hostRef} className="hermes-chat-xterm-host min-h-0 min-w-0 flex-1" />
+        {(ptyState === "connecting" || showResumeLoadingOverlay) && <div role="status" className="pointer-events-none absolute inset-x-4 top-4 flex justify-center"><span className="rounded-control border border-border bg-card px-4 py-2 text-sm text-muted-foreground">{showResumeLoadingOverlay ? PTY_RESUME_LOADING_MESSAGE : "Opening your conversation…"}</span></div>}
+        {showReconnectOverlay && <div className="absolute inset-x-4 top-4 flex justify-center"><div className="max-w-lg space-y-3 rounded-panel border border-warning/40 bg-card p-4 text-sm"><p>{ptyState === "reconnecting" ? "Reconnecting to your conversation…" : reconnectGaveUp ? PTY_GAVE_UP_BANNER.text : "Chat disconnected."}</p><div className="flex flex-wrap gap-2"><Button size="sm" outlined onClick={reconnectPty} prefix={<RotateCcw />} aria-label="Reconnect chat">Reconnect now</Button><Button size="sm" ghost onClick={() => navigate("/system")}>Check server status</Button></div></div></div>}
+        {ptyState === "ended" && <div className="absolute inset-0 flex items-center justify-center bg-background-base p-6"><div className="max-w-md space-y-5 text-center"><h2 className="font-display text-2xl">{endedReason === "start-failed" ? "Chat could not start" : "This chat has ended"}</h2><p className="text-sm leading-7 text-muted-foreground">{endedReason === "start-failed" ? PTY_START_FAILED_MESSAGE : PTY_SESSION_ENDED_MESSAGE}</p><div className="flex flex-wrap justify-center gap-2"><Button onClick={startFreshPty} prefix={<RotateCcw />} aria-label="Start a new chat session">Start new session</Button><Button outlined onClick={() => navigate("/logs")} aria-label="Open logs">Open logs</Button></div></div></div>}
+      </div>
+      {!narrow && !chatPanelCollapsed && <aside id="chat-side-panel" aria-label="Conversations" className="chat-conversations min-h-0 w-64 shrink-0 border-l border-border pl-4">{sessionList}</aside>}
+    </div>
+    <PluginSlot name="chat:bottom" />
+  </div>;
 }
 
 declare global {

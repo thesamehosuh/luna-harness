@@ -11,7 +11,7 @@ import { $isBlocked, $overlayState, patchOverlayState } from '../app/overlayStor
 import { $petBox } from '../app/petFlashStore.js'
 import { $uiState } from '../app/uiStore.js'
 import { usePet } from '../app/usePet.js'
-import { INLINE_MODE, SHOW_FPS, TERMUX_TUI_MODE } from '../config/env.js'
+import { DASHBOARD_TUI_MODE, INLINE_MODE, SHOW_FPS, TERMUX_TUI_MODE } from '../config/env.js'
 import { PLACEHOLDER } from '../content/placeholders.js'
 import { prevRenderedMsg } from '../domain/blockLayout.js'
 import {
@@ -205,7 +205,10 @@ const TranscriptPane = memo(function TranscriptPane({
               )}
 
               {row.msg.kind === 'intro' ? (
-                <Box flexDirection="column" paddingTop={1}>
+                DASHBOARD_TUI_MODE ? <Box flexDirection="column" paddingY={2}>
+                  <Text bold color={ui.theme.color.text}>Start a conversation.</Text>
+                  <Text color={ui.theme.color.muted}>Type a message below. Your companion’s settings are in Control Center.</Text>
+                </Box> : <Box flexDirection="column" paddingTop={1}>
                   <Banner maxWidth={Math.max(1, composer.cols - 2)} t={ui.theme} />
 
                   {row.msg.info && (

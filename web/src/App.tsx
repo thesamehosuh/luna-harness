@@ -24,6 +24,7 @@ import {
   Activity,
   BarChart3,
   Clock,
+  ChevronDown,
   Code,
   Cpu,
   Database,
@@ -52,7 +53,6 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { SelectionSwitcher } from "@nous-research/ui/ui/components/selection-switcher";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { ConfirmDialog } from "@nous-research/ui/ui/components/confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,6 @@ import { SidebarFooter } from "@/components/SidebarFooter";
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
 import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
 import { useSidebarStatus } from "@/hooks/useSidebarStatus";
-import { AuthWidget } from "@/components/AuthWidget";
 import { PageHeaderProvider } from "@/contexts/PageHeaderProvider";
 import { ProfileProvider } from "@/contexts/ProfileProvider";
 import { useProfileScope } from "@/contexts/useProfileScope";
@@ -73,6 +72,7 @@ import type { SystemAction } from "@/contexts/system-actions-context";
 // Route pages are lazy-loaded so the initial dashboard shell does not pay for
 // every admin surface (and heavy deps like xterm) up front.
 const ConfigPage = lazy(() => import("@/pages/ConfigPage"));
+const ControlCenterPage = lazy(() => import("@/pages/ControlCenterPage"));
 const DocsPage = lazy(() => import("@/pages/DocsPage"));
 const EnvPage = lazy(() => import("@/pages/EnvPage"));
 const FilesPage = lazy(() => import("@/pages/FilesPage"));
@@ -162,6 +162,7 @@ function UnknownRouteFallback({ pluginsLoading }: { pluginsLoading: boolean }) {
  */
 const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/": RootRedirect,
+  "/controls": ControlCenterPage,
   "/sessions": SessionsPage,
   "/onboarding": OnboardingPage,
   "/character": CharacterPage,
@@ -434,7 +435,7 @@ export default function App() {
 
   const builtinNav = useMemo(() => {
     const base = embeddedChat
-      ? [CHAT_NAV_ITEM, ...DASHBOARD_NAV]
+      ? [DASHBOARD_NAV[0], CHAT_NAV_ITEM, ...DASHBOARD_NAV.slice(1)]
       : DASHBOARD_NAV;
     return showTokenAnalytics
       ? base
@@ -509,7 +510,6 @@ export default function App() {
       className="luna-shell flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-background-base text-text-primary antialiased"
     >
       <a className="luna-skip-link" href="#main-content">{t.app.skipToContent ?? "Skip to content"}</a>
-      <SelectionSwitcher />
 
       <div
         aria-hidden
@@ -598,7 +598,7 @@ export default function App() {
           >
             <div
               className={cn(
-                "flex h-24 shrink-0 items-center gap-2",
+                "flex h-20 shrink-0 items-center gap-2",
                 collapsed ? "lg:justify-center lg:px-0" : "px-4 justify-between",
               )}
             >
@@ -613,7 +613,7 @@ export default function App() {
                 <LunaMark className="h-10 w-10 shrink-0 text-primary" />
                 <div>
                   <span className="luna-wordmark text-foreground">Luna</span>
-                  <p className="mt-1 max-w-36 text-[0.7rem] leading-relaxed text-muted-foreground">{t.app.companionSpace ?? "A space for your companion"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Harness</p>
                 </div>
               </div>
 
@@ -650,13 +650,13 @@ export default function App() {
               className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4"
               aria-label={t.app.navigation}
             >
-              {NAV_GROUPS.map((group) => (
+              {NAV_GROUPS.filter(group => sidebarNav.coreItems.some(item => item.group === group.id && !item.secondary)).map((group) => (
                 <section key={group.id} aria-label={navGroupLabel(group.id, t)} className="mb-4">
                   <p className={cn("px-3 pb-2 pt-3 text-xs font-medium text-text-tertiary", isDesktopCollapsed && "sr-only")}>
                     {navGroupLabel(group.id, t)}
                   </p>
                   <ul className="flex flex-col gap-1">
-                    {sidebarNav.coreItems.filter((item) => item.group === group.id).map((item) => (
+                    {sidebarNav.coreItems.filter((item) => item.group === group.id && !item.secondary).map((item) => (
                       <SidebarNavLink
                         closeMobile={closeMobile}
                         collapsed={isDesktopCollapsed}
@@ -669,6 +669,17 @@ export default function App() {
                   </ul>
                 </section>
               ))}
+
+              <details className="sidebar-more mb-3" open={sidebarNav.coreItems.some(item => item.secondary && item.path === normalizedPath) || undefined}>
+                <summary className="flex cursor-pointer list-none items-center gap-3 rounded-control px-3 py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground">
+                  <Settings className="size-4 shrink-0" /><span className={cn("flex-1", isDesktopCollapsed && "sr-only")}>More</span><ChevronDown className={cn("size-3.5", isDesktopCollapsed && "hidden")} />
+                </summary>
+                <ul className="mt-1 flex flex-col gap-1">
+                  {sidebarNav.coreItems.filter(item => item.secondary).map(item => <SidebarNavLink key={item.path} closeMobile={closeMobile} collapsed={isDesktopCollapsed} item={item} t={t} tooltipWarmRef={tooltipWarmRef} />)}
+                </ul>
+              </details>
+
+              <SidebarSystemActions collapsed={isDesktopCollapsed} onNavigate={closeMobile} status={sidebarStatus} tooltipWarmRef={tooltipWarmRef} />
 
               {sidebarNav.pluginItems.length > 0 && (
                 <div
@@ -702,13 +713,6 @@ export default function App() {
                 </div>
               )}
             </nav>
-
-            <SidebarSystemActions
-              collapsed={isDesktopCollapsed}
-              onNavigate={closeMobile}
-              status={sidebarStatus}
-              tooltipWarmRef={tooltipWarmRef}
-            />
 
             <div
               className={cn(
@@ -752,12 +756,11 @@ export default function App() {
                 isDesktopCollapsed && "lg:hidden",
               )}
             >
-              <AuthWidget />
               <SidebarFooter status={sidebarStatus} />
             </div>
           </aside>
 
-          <PageHeaderProvider pluginTabs={pluginTabMeta} hideHeader={isSetupRoute}>
+          <PageHeaderProvider pluginTabs={pluginTabMeta} hideHeader={isSetupRoute || isChatRoute}>
             <div
               className={cn(
                 "relative z-2 flex min-w-0 min-h-0 flex-1 flex-col",

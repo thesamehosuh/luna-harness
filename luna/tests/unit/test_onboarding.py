@@ -143,10 +143,10 @@ def test_step_report_shape(home):
 
 def test_personas_include_generic_and_current(home):
     presets = onboarding.personas()
-    assert [p["id"] for p in presets] == ["generic"]
+    assert [p["id"] for p in presets] == ["generic", "warm-friend", "dry-wit", "curious-mind"]
     (home / "SOUL.md").write_text("# Luna\n", encoding="utf-8")
     presets = onboarding.personas()
-    assert [p["id"] for p in presets] == ["current", "generic"]
+    assert [p["id"] for p in presets] == ["current", "generic", "warm-friend", "dry-wit", "curious-mind"]
     assert presets[0]["content"].startswith("# Luna")
 
 
@@ -245,3 +245,18 @@ def test_memory_start_uses_home_specific_compose_project(home, monkeypatch):
     env = (stack / ".env").read_text()
     assert "LUNA_MEMORY_API_KEY='synthetic'" in env
     assert "EMBEDDING_VECTOR_DIMENSIONS='1536'" in env
+
+
+def test_setup_and_character_share_presets_without_duplicate_starter(home):
+    from luna_cli import character
+    from luna_core.personas import library
+    starter = library()[0]["content"]
+    (home / "SOUL.md").write_text(starter, encoding="utf-8")
+    presets = onboarding.personas()
+    assert presets == character.personas()
+    assert "current" not in [preset["id"] for preset in presets]
+    assert [preset["id"] for preset in presets if preset["is_current"]] == ["generic"]
+    custom = "# My character\nAn existing custom voice.\n"
+    (home / "SOUL.md").write_text(custom, encoding="utf-8")
+    assert onboarding.personas()[0]["content"] == custom
+    assert onboarding.personas()[0]["is_current"] is True

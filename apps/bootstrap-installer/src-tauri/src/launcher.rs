@@ -19,7 +19,15 @@ struct Download { url: String, sha256: String }
 #[derive(Deserialize)]
 struct Release { version: String, runtime: Download }
 #[derive(Clone, Serialize)]
-struct Progress { stage: String, detail: String }
+struct Progress {
+    stage: String, detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    completed_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bytes_per_second: Option<f64>,
+}
 struct State {
     busy: Mutex<()>, cancelled: AtomicBool, backend: Mutex<Option<Child>>,
     home: PathBuf, preferences: std::sync::Mutex<controls::Preferences>,
@@ -59,11 +67,36 @@ fn clean_home(base: PathBuf) -> PathBuf {
 }
 
 fn progress(app: &tauri::AppHandle, stage: &str, detail: &str) {
-    let _ = app.emit("luna-progress", Progress { stage: stage.into(), detail: detail.into() });
+    let _ = app.emit("luna-progress", Progress { stage: stage.into(), detail: detail.into(), completed_bytes: None, total_bytes: None, bytes_per_second: None });
+}
+fn transfer_progress(app: &tauri::AppHandle, stage: &str, received: u64, total: Option<u64>, speed: f64) {
+    let _ = app.emit("luna-progress", Progress { stage: stage.into(), detail: if stage == "runtime" { "Downloading the Python installer…" } else { "Downloading the Luna runtime…" }.into(), completed_bytes: Some(received), total_bytes: total, bytes_per_second: Some(speed) });
+}
+
+fn setup_stage_detail(stage: &str) -> &'static str {
+    match stage {
+        "dependencies" => "Installing Python and Luna’s dependencies…",
+        "chat-runtime" => "Preparing your chat runtime…",
+        "native-tools" => "Setting up native tools…",
+        "personal-home" => "Preparing your profile…",
+        "ready" => "Installation verified. Finishing up…",
+        _ => "Preparing Luna…",
+    }
 }
 fn check_cancel(state: &State) -> Result<()> {
     if state.cancelled.load(Ordering::Relaxed) { bail!("Setup cancelled. Open Luna again to resume.") }
     Ok(())
+}
+// A stalled server must not make Cancel (or window close) wait for the read timeout.
+async fn cancellable<T>(cancelled: &AtomicBool, future: impl std::future::Future<Output = T>) -> Result<T> {
+    tokio::pin!(future);
+    loop {
+        if cancelled.load(Ordering::Relaxed) { bail!("Setup cancelled. Open Luna again to resume.") }
+        tokio::select! {
+            result = &mut future => return Ok(result),
+            _ = tokio::time::sleep(Duration::from_millis(100)) => {},
+        }
+    }
 }
 fn digest(path: &Path) -> Result<String> {
     let mut file = fs::File::open(path)?;
@@ -73,7 +106,7 @@ fn digest(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hash.finalize()))
 }
 
-async fn download(app: &tauri::AppHandle, state: &State, spec: &Download, target: &Path, limit: u64) -> Result<()> {
+async fn download(app: &tauri::AppHandle, state: &State, spec: &Download, target: &Path, limit: u64, stage: &str) -> Result<()> {
     if spec.sha256.len() != 64 || !spec.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
         bail!("This launcher has an invalid release checksum")
     }
@@ -87,31 +120,38 @@ async fn download(app: &tauri::AppHandle, state: &State, spec: &Download, target
         let offset = fs::metadata(&partial).map(|m| m.len()).unwrap_or(0);
         let mut request = client.get(url.clone());
         if offset > 0 { request = request.header("Range", format!("bytes={offset}-")); }
-        let response = match request.send().await.and_then(|r| r.error_for_status()) {
+        let response = match cancellable(&state.cancelled, request.send()).await?.and_then(|r| r.error_for_status()) {
             Ok(r) => r,
-            Err(e) if attempt < 2 => { progress(app, "download", "Connection interrupted; retrying…"); let _ = e; continue },
+            Err(e) if attempt < 2 => { progress(app, stage, "Connection interrupted; retrying…"); let _ = e; continue },
             Err(e) => return Err(e).context("Download interrupted. Retry to resume"),
         };
         let resumed = response.status() == reqwest::StatusCode::PARTIAL_CONTENT &&
             response.headers().get("content-range").and_then(|v|v.to_str().ok())
                 .map(|v|v.starts_with(&format!("bytes {offset}-"))).unwrap_or(false);
         let mut received = if resumed { offset } else { 0 };
+        let total = response.content_length().and_then(|length| length.checked_add(received));
+        if total.is_some_and(|size| size > limit) { bail!("Download exceeds this release's size limit") }
+        let started = Instant::now();
+        let initial_received = received;
+        transfer_progress(app, stage, received, total, 0.0);
         let mut output = fs::OpenOptions::new().create(true).write(true).append(resumed).truncate(!resumed).open(&partial)?;
         let mut chunks = response.bytes_stream();
         let mut failure = None;
         let mut last = Instant::now();
-        while let Some(chunk) = chunks.next().await {
+        while let Some(chunk) = cancellable(&state.cancelled, chunks.next()).await? {
             check_cancel(state)?;
             let bytes = match chunk { Ok(b) => b, Err(e) => { failure = Some(e); break } };
             received += bytes.len() as u64;
             if received > limit { bail!("Download exceeds this release's size limit") }
             output.write_all(&bytes)?;
             if last.elapsed() > Duration::from_millis(400) {
-                progress(app, "download", &format!("Downloaded {} MB", received / 1_000_000)); last = Instant::now();
+                let speed = (received - initial_received) as f64 / started.elapsed().as_secs_f64().max(0.001);
+                transfer_progress(app, stage, received, total, speed); last = Instant::now();
             }
         }
         output.sync_all()?; drop(output);
         if let Some(e) = failure { if attempt < 2 { continue } return Err(e).context("Download interrupted; retry to resume") }
+        progress(app, stage, "Checking the download’s integrity…");
         if digest(&partial)? != spec.sha256 { fs::remove_file(&partial)?; bail!("Download checksum did not match. Please retry.") }
         if target.exists() { fs::remove_file(target)?; }
         fs::rename(&partial, target)?;
@@ -205,7 +245,7 @@ async fn run_stage(app: &tauri::AppHandle, state: &State, cmd: &mut Command) -> 
         }
         tokio::select! {
             line = crate::powershell::read_decoded_line(&mut stdout, &mut buffer), if stdout_open => match line {
-                Ok(Some(line)) => if let Some(stage) = line.strip_prefix("LUNA_STAGE ") { progress(app, stage, "Preparing Luna…"); },
+                Ok(Some(line)) => if let Some(stage) = line.strip_prefix("LUNA_STAGE ") { progress(app, stage, setup_stage_detail(stage)); },
                 Ok(None) => stdout_open = false,
                 Err(e) => { stop(&mut child).await; drain.abort(); return Err(e.into()) },
             },
@@ -241,7 +281,7 @@ async fn prepare(app: &tauri::AppHandle, state: &State, home: &Path, repair: boo
     let cache = home.join("cache/launcher"); fs::create_dir_all(&cache)?;
     let archive = cache.join("luna-runtime.tar.gz");
     progress(app, "download", &format!("Downloading Luna {}…", release.version));
-    download(app, state, &release.runtime, &archive, 500_000_000).await?;
+    download(app, state, &release.runtime, &archive, 500_000_000, "download").await?;
     let root = home.join("releases").join(uuid::Uuid::new_v4().to_string());
     unpack(&archive, &root, false)?;
     let metadata: serde_json::Value = serde_json::from_slice(&fs::read(root.join("luna-release.json"))?)?;
@@ -252,7 +292,7 @@ async fn prepare(app: &tauri::AppHandle, state: &State, home: &Path, repair: boo
     let uv_spec: Download = serde_json::from_value(uv_catalog["targets"][format!("{os}-{arch}")].clone())?;
     let uv_archive = cache.join(if cfg!(windows) {"uv.zip"} else {"uv.tar.gz"});
     progress(app, "runtime", "Preparing Python…");
-    download(app, state, &uv_spec, &uv_archive, 100_000_000).await?;
+    download(app, state, &uv_spec, &uv_archive, 100_000_000, "runtime").await?;
     let uv_root = home.join("runtime/uv"); unpack(&uv_archive, &uv_root, true)?;
     let uv = uv_root.join(if cfg!(windows) {"uv.exe"} else {"uv"});
     run_stage(app, state, command(&uv, home).args(["run", "--no-project", "--managed-python", "--python", "3.11"])
@@ -312,6 +352,7 @@ async fn start(app: tauri::AppHandle, state: &State, repair: bool) -> Result<()>
             // Separate label: dashboard never inherits the bundled bootstrap's native ACL.
             let window = tauri::WebviewWindowBuilder::new(&app, "dashboard", tauri::WebviewUrl::External(url))
                 .title("Luna").inner_size(1200.0, 820.0).min_inner_size(720.0, 520.0)
+                .background_color(tauri::window::Color(23, 19, 43, 255))
                 .visible(!state.hidden_launch.load(Ordering::Relaxed))
                 .on_navigation(move |url| {
                     if url.origin() == origin { return true }
@@ -451,7 +492,6 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::Builder::new().app_name("Luna")
             .args(["--background".to_owned(), "--luna-home".to_owned(), home.to_string_lossy().into_owned()]).build())
         .plugin(tauri_plugin_dialog::init())
-        .menu(controls::menu)
         .on_menu_event(|app, event| {
             if controls::handle_menu(app, event.id().as_ref()) { return }
             if event.id().as_ref() == "luna-quit" {
@@ -525,6 +565,15 @@ mod tests {
     }
     impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 
+    #[tokio::test]
+    async fn cancellation_interrupts_a_stalled_network_operation() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let trigger = cancelled.clone();
+        tokio::spawn(async move { tokio::time::sleep(Duration::from_millis(20)).await; trigger.store(true, Ordering::Relaxed); });
+        let result = tokio::time::timeout(Duration::from_secs(1), cancellable(&cancelled, std::future::pending::<()>())).await;
+        assert!(result.unwrap().unwrap_err().to_string().contains("cancelled"));
+        assert_eq!(cancellable(&AtomicBool::new(false), async { 42 }).await.unwrap(), 42);
+    }
     #[test]
     fn managed_python_children_use_utf8_on_every_platform() {
         let cmd = command(Path::new("python"), Path::new("home"));

@@ -154,6 +154,8 @@ def check_telegram() -> Dict[str, Any]:
     cfg = _config()
     token = _secret("TELEGRAM_BOT_TOKEN")
     telegram = cfg.get("telegram") or {}
+    if not isinstance(telegram, dict):
+        telegram = {}
     allowed = telegram.get("group_allowed_chats") if isinstance(telegram, dict) else None
     allowed = [str(x) for x in allowed if not _placeholder(str(x)) and str(x) not in {"0", "-1000000000000"}] if isinstance(allowed, list) else []
     room_chat = str(((cfg.get("luna") or {}).get("room") or {}).get("chat_id") or "").strip()
@@ -168,11 +170,13 @@ def check_telegram() -> Dict[str, Any]:
     if not allowed and not room_bound:
         missing.append("group chat binding")
     if not admin:
-        missing.append("admin ids (optional but recommended)")
-    ok = not _placeholder(token) and (bool(allowed) or room_bound)
+        missing.append("owner user id")
+    ok = not _placeholder(token) and (bool(allowed) or room_bound) and bool(admin)
     detail = "ready" if ok else "missing: " + ", ".join(missing)
     return _status(ok, detail, token_present=not _placeholder(token), groups=allowed or ([room_chat] if room_bound else []),
-                   admin_configured=bool(admin))
+                   admin_configured=bool(admin), admin_ids=admin,
+                   group_admin_ids=[str(x) for x in (telegram.get("group_allow_admin_from") or []) if str(x) != "0"],
+                   allowed_user_ids=[value.strip() for value in _secret("TELEGRAM_ALLOWED_USERS").split(",") if value.strip()])
 
 
 def _honcho_base_url(cfg: Optional[Dict[str, Any]] = None) -> str:
@@ -443,46 +447,13 @@ def honcho_up(timeout: int = 180) -> Dict[str, Any]:
 
 # ── Character presets ────────────────────────────────────────────────────────────────────────────
 
-from hermes_cli.product_runtime import default_soul
-
-GENERIC_PERSONA = default_soul() or """\
----
-name: Companion
-description: A calm, capable companion who is at home in the group chat.
----
-
-You are a companion in this group chat. Choose your name in the dashboard.
-
-Voice: casual, brief, warm. You talk like a person who is there with their friends. Opinions are
-held loosely; confidence without arrogance.
-
-In groups: speak when you genuinely have something to add. Short beats clever. Never spam emoji,
-never lecture, never leak anyone's personal details.
-
-In the owner's DM: a full-capability assistant, thorough when asked, still human in tone.
-"""
-
-
 def personas() -> List[Dict[str, Any]]:
-    """Pickable persona presets: the current SOUL (if any) plus a generic companion template."""
-    soul = tune._home() / "SOUL.md"
-    out: List[Dict[str, Any]] = []
-    if soul.exists():
-        content = soul.read_text(encoding="utf-8", errors="replace")
-        if content.strip():
-            out.append({
-                "id": "current",
-                "name": "Keep current persona",
-                "description": content.strip().splitlines()[0][:100],
-                "content": content,
-            })
-    out.append({
-        "id": "generic",
-        "name": "Generic companion",
-        "description": "A neutral, calm companion persona and a starting point for a custom character.",
-        "content": GENERIC_PERSONA,
-    })
-    return out
+    """Shared persona presets, with an existing custom character preserved as a choice."""
+    from luna_core.personas import library
+
+    path = tune._home() / "SOUL.md"
+    current = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+    return library(current)
 
 
 # ── Wake test (dry-run) ──────────────────────────────────────────────────────────────────────────

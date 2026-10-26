@@ -16,6 +16,7 @@ ROOT = Path(os.environ.get('LUNA_TEST_CODE_ROOT') or Path(__file__).resolve().pa
 sys.path[:0] = [str(ROOT), str(ROOT / 'luna/lib')]
 MARKER = 'LUNA_DASHBOARD_PERSONA_FIXTURE'
 RESULT = 'LUNA_DASHBOARD_CONTEXT_OK'
+INPUT_PROMPT = 'luna-fixture>'
 
 class Provider(BaseHTTPRequestHandler):
     requests = []
@@ -57,9 +58,6 @@ class Provider(BaseHTTPRequestHandler):
 
 def verify(home=None, *, people_check=False):
     import yaml
-    from hermes_cli.pty_bridge import PtyBridge
-    from hermes_cli.web_server_chat import _resolve_chat_argv
-    from hermes_cli import config
     server = ThreadingHTTPServer(('127.0.0.1', 0), Provider)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     Provider.requests = []
@@ -69,6 +67,9 @@ def verify(home=None, *, people_check=False):
         target = Path(home) if home else Path(temporary)
         target.mkdir(parents=True, exist_ok=True)
         os.environ.update(HERMES_HOME=str(target), LUNA_HOME=str(target), HERMES_PYTHON='/usr/bin/python3', HERMES_PYTHON_SRC_ROOT='/tmp', HERMES_TUI_DIR='/tmp', HERMES_SKIP_NODE_BOOTSTRAP='1')
+        # Product imports may seed a home; bind the disposable home first.
+        from hermes_cli.pty_bridge import PtyBridge
+        from hermes_cli.web_server_chat import _resolve_chat_argv
         workspace = target / 'workspace';workspace.mkdir(exist_ok=True)
         data = {'model': {'provider':'custom','default':'dashboard-fixture','base_url':f'http://127.0.0.1:{server.server_port}/v1','api_key':'synthetic-fixture-key','api_mode':'chat_completions'}, 'luna': {'ambient': {'enabled': False}}, 'memory': {'provider':'', 'memory_enabled':False, 'user_profile_enabled':False}, 'terminal': {'cwd':str(workspace)}, 'display': {'skin':'default'}, 'platform_toolsets': {'cli':[]}, 'fallback_providers':[], 'plugins': {'enabled':[]}}
         if people_check:
@@ -79,6 +80,13 @@ def verify(home=None, *, people_check=False):
             IdentityRegistry(conn).upsert_auto('telegram', 'u_fixture', display_name='Fixture Friend')
             conn.close()
         # This helper runs only in scratch homes, including the release smoke's disposable install.
+        # Wait for a fixture-owned composer marker, not decorative startup copy.
+        # The embedded dashboard intentionally omits the standalone CLI banner.
+        data['display']['skin'] = 'fixture-input'
+        skins = target / 'skins'; skins.mkdir(exist_ok=True)
+        (skins / 'fixture-input.yaml').write_text(yaml.safe_dump({
+            'name': 'fixture-input', 'branding': {'prompt_symbol': INPUT_PROMPT},
+        }))
         (target / 'config.yaml').write_text(yaml.safe_dump(data))
         (target / 'SOUL.md').write_text('# Nova\n\n'+MARKER+'\n')
         argv, cwd, env = _resolve_chat_argv()
@@ -97,7 +105,7 @@ def verify(home=None, *, people_check=False):
                 if chunk is None: break
                 output += chunk
                 plain = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', output.decode(errors='replace'))
-                if not submitted and 'Nova' in plain and time.monotonic() - began > 5:
+                if not submitted and INPUT_PROMPT in plain and time.monotonic() - began > 5:
                     time.sleep(0.3)
                     asyncio.run(bridge.write(b'Reply with the dashboard check result.'))
                     time.sleep(0.3)
@@ -105,7 +113,7 @@ def verify(home=None, *, people_check=False):
                     submitted = True
                 if RESULT in plain and Provider.requests: break
             Path('/tmp/luna-dashboard-chat-pty.log').write_bytes(output)
-            report = {'bundled_tui': 'tui_dist' in ' '.join(argv), 'selected_home': env['HERMES_HOME'] == str(target), 'source_pinned': env['HERMES_PYTHON_SRC_ROOT'] == str(ROOT), 'persona_in_inference': any(row['persona'] for row in Provider.requests), 'luna_runtime_in_inference': any(row['luna_runtime'] for row in Provider.requests), 'no_hermes_identity': bool(Provider.requests) and all(not row['hermes_identity'] for row in Provider.requests), 'rendered_response': RESULT in plain, 'local_requests': len(Provider.requests)}
+            report = {'bundled_tui': 'tui_dist' in ' '.join(argv), 'selected_home': env['HERMES_HOME'] == str(target), 'source_pinned': env['HERMES_PYTHON_SRC_ROOT'] == str(ROOT), 'input_submitted': submitted, 'persona_in_inference': any(row['persona'] for row in Provider.requests), 'luna_runtime_in_inference': any(row['luna_runtime'] for row in Provider.requests), 'no_hermes_identity': bool(Provider.requests) and all(not row['hermes_identity'] for row in Provider.requests), 'rendered_response': RESULT in plain, 'local_requests': len(Provider.requests)}
             agent_log = target / 'logs/agent.log'
             report['no_unrelated_sdk_install'] = not agent_log.exists() or 'Lazy-installing' not in agent_log.read_text(errors='replace')
             if people_check:

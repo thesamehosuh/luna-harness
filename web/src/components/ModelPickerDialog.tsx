@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@nous-research/ui/ui/components/checkbox";
-import { ListItem } from "@nous-research/ui/ui/components/list-item";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
@@ -11,7 +10,8 @@ import { Check, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
-import { cn, themedBody } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import OpenCodeSetup from "@/components/OpenCodeSetup";
 import { queryMatchesProviderOnly } from "@/lib/model-picker-filter";
 import { fuzzyRank, modelSearchText } from "@hermes/shared";
 import { errorMessage } from "@/lib/api-error";
@@ -75,6 +75,8 @@ interface Props {
   title?: string;
   /** If true, hides "Persist globally" checkbox — always saves to config.yaml. */
   alwaysGlobal?: boolean;
+  /** Only main-companion pickers may configure the free engine directly. */
+  onFreeModelSelected?: () => void;
 }
 
 export function ModelPickerDialog(props: Props) {
@@ -85,7 +87,7 @@ export function ModelPickerDialog(props: Props) {
     loader,
     onApply,
     onClose,
-    title = "Switch Model",
+    title = "Choose a model",
     alwaysGlobal = false,
   } = props;
   const standalone = !!loader && !!onApply;
@@ -104,6 +106,9 @@ export function ModelPickerDialog(props: Props) {
   const [pendingConfirm, setPendingConfirm] =
     useState<PendingExpensiveConfirm | null>(null);
   const closedRef = useRef(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [freeSetup, setFreeSetup] = useState(false);
 
   const applyOptions = (r: ModelOptionsResult) => {
     const next = r?.providers ?? [];
@@ -112,7 +117,7 @@ export function ModelPickerDialog(props: Props) {
     setCurrentProviderSlug(String(r?.provider ?? ""));
     setSelectedSlug((prev) => {
       if (prev && next.some((p) => p.slug === prev)) return prev;
-      return (next.find((p) => p.is_current) ?? next[0])?.slug ?? "";
+      return (next.find((p) => p.is_current && p.models?.length) ?? next.find(p => p.authenticated && p.models?.length) ?? next.find(p => p.models?.length))?.slug ?? "";
     });
     setSelectedModel("");
   };
@@ -178,17 +183,26 @@ export function ModelPickerDialog(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Esc closes.
+  // Keyboard containment and restoration keep the picker usable above a live chat.
   useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        if (pendingConfirm) setPendingConfirm(null); else onClose();
+      }
+      if (e.key === "Tab") {
+        const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), a[href]') ?? []);
+        const first = items[0], last = items.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; previous?.focus(); };
+  }, [onClose, pendingConfirm]);
 
   const selectedProvider = useMemo(
     () => providers.find((p) => p.slug === selectedSlug) ?? null,
@@ -212,7 +226,7 @@ export function ModelPickerDialog(props: Props) {
   // of "0 models" rows made the picker feel broken.
   const filteredProviders = useMemo(() => {
     const ranked = fuzzyRank(
-      providers,
+      showAll || trimmedQuery ? providers : providers.filter(p => (p.authenticated !== false && !!p.models?.length) || p.is_current),
       trimmedQuery,
       (p) => `${p.name} ${p.slug} ${(p.models ?? []).join(" ")}`,
     ).map((r) => r.item);
@@ -220,7 +234,7 @@ export function ModelPickerDialog(props: Props) {
     const withModels = ranked.filter((p) => (p.models ?? []).length > 0);
     const withoutModels = ranked.filter((p) => (p.models ?? []).length === 0);
     return [...withModels, ...withoutModels];
-  }, [providers, trimmedQuery]);
+  }, [providers, trimmedQuery, showAll]);
 
   // A query that matched the SELECTED provider by name/slug (not its models)
   // located that provider — it shouldn't also hide that provider's models
@@ -250,7 +264,7 @@ export function ModelPickerDialog(props: Props) {
     [models, trimmedQuery, queryMatchesSelectedProviderOnly],
   );
 
-  const canConfirm = !!selectedProvider && !!selectedModel && !applying;
+  const canConfirm = !!selectedProvider && selectedProvider.authenticated !== false && !!selectedModel && !applying;
 
   const applySelection = async (
     confirmExpensiveModel = false,
@@ -260,7 +274,7 @@ export function ModelPickerDialog(props: Props) {
     const model = forced?.model ?? selectedModel;
     const shouldPersistGlobal = forced?.persistGlobal ?? persistGlobal;
 
-    if (!providerSlug || !model || applying) return;
+    if (!providerSlug || !model || applying || providers.find(provider => provider.slug === providerSlug)?.authenticated === false) return;
 
     if (standalone && onApply) {
       setApplying(true);
@@ -344,7 +358,7 @@ export function ModelPickerDialog(props: Props) {
       aria-modal="true"
       aria-labelledby="model-picker-title"
     >
-      <div className={cn(themedBody, "relative w-full max-w-3xl max-h-[80vh] rounded-panel border border-border bg-card shadow-2xl flex flex-col")}>
+      <div ref={dialogRef} className="model-picker relative flex w-full max-w-4xl flex-col rounded-panel border border-border bg-card shadow-2xl">
         <Button
           ghost
           size="icon"
@@ -355,33 +369,32 @@ export function ModelPickerDialog(props: Props) {
           <X />
         </Button>
 
-        <header className="p-5 pb-3 border-b border-border">
+        <header className="rounded-t-[inherit] px-6 pb-5 pt-6">
           <h2
             id="model-picker-title"
-            className="font-mondwest text-display text-base tracking-wider"
+            className="font-display text-2xl"
           >
             {title}
           </h2>
-          <p className="text-xs text-muted-foreground mt-1 font-mono">
-            current: {currentModel || "(unknown)"}
-            {currentProviderSlug && ` · ${currentProviderSlug}`}
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{currentModel ? `Current model: ${currentModel.split('/').at(-1)}` : "Choose a connection, then the model you want to use."}</p>
         </header>
 
-        <div className="px-5 pt-3 pb-2 border-b border-border">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-6 pb-5">
+          <div className="relative min-w-40 flex-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               autoFocus
-              placeholder="Filter providers and models…"
+              aria-label="Search models" placeholder="Search models or connections…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="pl-7 h-8 text-sm"
+              className="h-11 pl-8 text-sm"
             />
           </div>
+          <Button ghost size="sm" aria-pressed={showAll} onClick={() => { setShowAll(value => !value); setFreeSetup(false); }}>{showAll ? "Your connections" : "All providers"}</Button>
         </div>
 
-        <div className="flex-1 min-h-0 grid grid-cols-[200px_1fr] overflow-hidden">
+        {props.onFreeModelSelected && <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-3 text-sm"><span className="text-muted-foreground">Free models through OpenCode</span><Button ghost size="sm" onClick={() => setFreeSetup(value => !value)}>{freeSetup ? "Back to models" : "Set up free chat"}</Button></div>}
+        {freeSetup ? <div className="min-h-0 flex-1 overflow-y-auto p-6"><OpenCodeSetup onSaved={() => { props.onFreeModelSelected?.(); onClose(); }} /></div> : <div className="model-picker-body min-h-0 flex-1">
           <ProviderColumn
             loading={loading}
             error={error}
@@ -397,6 +410,7 @@ export function ModelPickerDialog(props: Props) {
           />
 
           <ModelColumn
+            onClose={onClose}
             provider={selectedProvider}
             models={filteredModels}
             allModels={models}
@@ -414,12 +428,12 @@ export function ModelPickerDialog(props: Props) {
               });
             }}
           />
-        </div>
+        </div>}
 
-        <footer className="border-t border-border p-3 flex items-center justify-between gap-3 flex-wrap">
+        <footer className="flex flex-wrap items-center justify-between gap-3 rounded-b-[inherit] border-t border-border px-6 py-4">
           {alwaysGlobal ? (
             <span className="text-xs text-muted-foreground">
-              Saves to config.yaml — applies to new sessions.
+              Applies to new conversations.
             </span>
           ) : (
             <div className="flex items-center gap-2">
@@ -435,7 +449,7 @@ export function ModelPickerDialog(props: Props) {
                 className="font-mondwest normal-case tracking-normal text-xs text-muted-foreground cursor-pointer"
                 htmlFor="model-picker-persist-global"
               >
-                Persist globally (otherwise this session only)
+                Use for future conversations too
               </Label>
             </div>
           )}
@@ -447,13 +461,13 @@ export function ModelPickerDialog(props: Props) {
               disabled={applying || loading || refreshing}
             >
               {refreshing ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Refresh Models
+              Refresh
             </Button>
             <Button outlined onClick={onClose} disabled={applying}>
               Cancel
             </Button>
-            <Button onClick={confirm} disabled={!canConfirm}>
-              {applying ? <Spinner /> : "Switch"}
+            <Button onClick={confirm} disabled={!canConfirm || freeSetup}>
+              {applying ? <Spinner /> : "Use model"}
             </Button>
           </div>
         </footer>
@@ -485,7 +499,7 @@ export function ModelPickerDialog(props: Props) {
 
 /** Empty picker: no key and no OAuth login anywhere. Points at the two in-app fixes. */
 export const NO_PROVIDERS_MESSAGE =
-  "No model providers are set up yet. Add an API key under Keys or sign in to a provider under Models to see models here.";
+  "Connect an account or add an API key to choose a model. You can also set up free chat through OpenCode.";
 
 function ProviderColumn({
   loading,
@@ -508,7 +522,7 @@ function ProviderColumn({
   onClose(): void;
 }) {
   return (
-    <div className="border-r border-border overflow-y-auto">
+    <div className="model-picker-connections min-h-0 overflow-y-auto border-r border-border p-3">
       {loading && (
         <div className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
           <Spinner className="text-xs" /> loading…
@@ -525,11 +539,11 @@ function ProviderColumn({
             <div className="flex flex-col gap-2">
               <span>{NO_PROVIDERS_MESSAGE}</span>
               <div className="flex flex-wrap gap-2">
-                <Link to="/env" onClick={onClose} className="underline underline-offset-2 hover:text-foreground">
-                  Open Keys
+                <Link to="/controls#keys" onClick={onClose} className="underline underline-offset-2 hover:text-foreground">
+                  Add API key
                 </Link>
-                <Link to="/models" onClick={onClose} className="underline underline-offset-2 hover:text-foreground">
-                  Sign in to a provider
+                <Link to="/controls#model" onClick={onClose} className="underline underline-offset-2 hover:text-foreground">
+                  Connect account
                 </Link>
               </div>
             </div>
@@ -540,24 +554,18 @@ function ProviderColumn({
       {providers.map((p) => {
         const active = p.slug === selectedSlug;
         return (
-          <ListItem
-            key={p.slug}
-            active={active}
-            onClick={() => onSelect(p.slug)}
-            className={`items-start text-xs border-l-2 ${
-              active ? "border-l-primary" : "border-l-transparent"
-            }`}
-          >
+          <button type="button" key={p.slug} aria-pressed={active} onClick={() => onSelect(p.slug)} className={cn("model-picker-provider", active && "is-active")}>
+
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-medium truncate">{p.name}</span>
+                <span className="font-medium leading-6">{p.name}</span>
                 {p.is_current && <CurrentTag />}
               </div>
-              <div className="text-xs text-text-secondary font-mono truncate">
-                {p.slug} · {p.total_models ?? p.models?.length ?? 0} models
+              <div className="mt-1 text-xs text-muted-foreground">
+                {p.authenticated === false ? "Needs connection" : p.models?.length ? `${p.models.length} models` : "Connect to see models"}
               </div>
             </div>
-          </ListItem>
+          </button>
         );
       })}
     </div>
@@ -577,6 +585,7 @@ function ModelColumn({
   currentProviderSlug,
   onSelect,
   onConfirm,
+  onClose,
 }: {
   provider: ModelOptionProvider | null;
   models: { model: string; positions: number[] }[];
@@ -586,24 +595,22 @@ function ModelColumn({
   currentProviderSlug: string;
   onSelect(model: string): void;
   onConfirm(model: string): void;
+  onClose(): void;
 }) {
   if (!provider) {
     return (
-      <div className="overflow-y-auto">
+      <div className="model-picker-models min-h-0 overflow-y-auto p-4">
         <div className="p-4 text-xs text-muted-foreground italic">
-          pick a provider →
+          Choose a connection to see its models.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="overflow-y-auto">
-      {provider.warning && (
-        <div className="p-3 text-xs text-destructive border-b border-border">
-          {provider.warning}
-        </div>
-      )}
+    <div className="model-picker-models min-h-0 overflow-y-auto p-4">
+      <div className="mb-4 px-2"><h3 className="font-medium">{provider.name}</h3><p className="mt-1 text-xs text-muted-foreground">{provider.authenticated === false ? "Connect this provider to start chatting." : "Select a model for your conversation."}</p></div>
+      {(provider.warning || provider.authenticated === false) && <div className="mb-4 rounded-control bg-background-base p-4 text-sm"><p className="mb-3 text-muted-foreground">{provider.authenticated === false ? "This connection needs an account or an API key." : "This provider needs attention. Check its connection, then refresh the models."}</p><Link to="/controls#model" onClick={onClose} className="text-primary hover:underline">Manage connection →</Link></div>}
 
       {models.length === 0 ? (
         <div className="p-4 text-xs text-muted-foreground italic">
@@ -618,21 +625,22 @@ function ModelColumn({
             m === currentModel && provider.slug === currentProviderSlug;
 
           return (
-            <ListItem
+            <button type="button"
               key={m}
-              active={active}
+              disabled={provider.authenticated === false}
+              aria-pressed={active}
               onClick={() => onSelect(m)}
               onDoubleClick={() => onConfirm(m)}
-              className="px-3 py-1.5 text-xs font-mono"
+              className={cn("model-picker-model", active && "is-active")}
             >
               <Check
                 className={`h-3 w-3 shrink-0 ${active ? "text-primary" : "text-transparent"}`}
               />
-              <span className="flex-1 truncate">
+              <span className="min-w-0 flex-1 break-all text-left">
                 <HighlightedText text={m} positions={positions} />
               </span>
               {isCurrent && <CurrentTag />}
-            </ListItem>
+            </button>
           );
         })
       )}
@@ -642,7 +650,7 @@ function ModelColumn({
 
 function CurrentTag() {
   return (
-    <span className="text-display text-xs tracking-wider text-primary shrink-0">
+    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
       current
     </span>
   );

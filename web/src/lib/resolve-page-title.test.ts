@@ -26,14 +26,14 @@ const t = {
 describe("resolvePageTitle", () => {
   it("uses i18n nav keys for translated routes", () => {
     expect(resolvePageTitle("/sessions", t, [])).toBe("Sessions");
-    expect(resolvePageTitle("/env", t, [])).toBe("Keys");
+    expect(resolvePageTitle("/env", t, [])).toBe("API keys & tokens");
   });
 
   it("renders initialisms and literal labels correctly", () => {
     // Regression: the naive capitalize fallback produced "Mcp".
     expect(resolvePageTitle("/mcp", t, [])).toBe("MCP");
     expect(resolvePageTitle("/system", t, [])).toBe("System");
-    expect(resolvePageTitle("/channels", t, [])).toBe("Channels");
+    expect(resolvePageTitle("/channels", t, [])).toBe("Chat connections");
     expect(resolvePageTitle("/webhooks", t, [])).toBe("Webhooks");
     expect(resolvePageTitle("/pairing", t, [])).toBe("Pairing");
     expect(resolvePageTitle("/files", t, [])).toBe("Files");

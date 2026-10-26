@@ -25,6 +25,7 @@ import { errorMessage } from "@/lib/api-error";
 
 interface Props {
   guided?: boolean;
+  compact?: boolean;
   onError?: (msg: string) => void;
   onSuccess?: (msg: string) => void;
 }
@@ -51,7 +52,7 @@ function formatExpiresAt(
   }
 }
 
-export function OAuthProvidersCard({ onError, onSuccess, guided = true }: Props) {
+export function OAuthProvidersCard({ onError, onSuccess, guided = true, compact = false }: Props) {
   const [providers, setProviders] = useState<OAuthProvider[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -96,8 +97,8 @@ export function OAuthProvidersCard({ onError, onSuccess, guided = true }: Props)
   const totalCount = visibleProviders?.length ?? 0;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={compact ? "border-0 bg-transparent shadow-none" : undefined}>
+      {!compact && <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-muted-foreground" />
@@ -121,8 +122,8 @@ export function OAuthProvidersCard({ onError, onSuccess, guided = true }: Props)
             .replace("{connected}", String(connectedCount))
             .replace("{total}", String(totalCount))}
         </CardDescription>
-      </CardHeader>
-      <CardContent>
+      </CardHeader>}
+      <CardContent className={compact ? "p-0" : undefined}>
         {loading && providers === null && (
           <div className="flex items-center justify-center py-8">
             <Spinner className="text-xl text-primary" />
@@ -154,12 +155,12 @@ export function OAuthProvidersCard({ onError, onSuccess, guided = true }: Props)
                   <div className="flex flex-col min-w-0 gap-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{guided && p.id === "openai-codex" ? "ChatGPT (OpenAI Codex)" : p.name}</span>
-                      <Badge
+                      {!guided && <Badge
                         tone="outline"
                         className="text-xs tracking-wide"
                       >
                         {t.oauth.flowLabels[p.flow]}
-                      </Badge>
+                      </Badge>}
                       {p.status.logged_in && (
                         <Badge tone="success" className="text-xs">
                           {t.oauth.connected}
@@ -188,7 +189,7 @@ export function OAuthProvidersCard({ onError, onSuccess, guided = true }: Props)
                         )}
                       </span>
                     )}
-                    {!p.status.logged_in && (
+                    {!p.status.logged_in && !guided && (
                       <>
                         <span className="text-xs text-text-secondary">
                           {guided ? "Sign in to connect this account." : t.oauth.notConnected.split("{command}")[0].trimEnd()}

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Luna",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "identifier": "org.luna.companion",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,13 +14,14 @@
       {
         "label": "main",
         "title": "Luna",
-        "width": 880,
-        "height": 780,
-        "minWidth": 720,
+        "width": 960,
+        "height": 700,
+        "minWidth": 620,
         "minHeight": 520,
         "resizable": true,
         "fullscreen": false,
-        "decorations": true,
+        "decorations": false,
+        "backgroundColor": "#17132b",
         "transparent": false,
         "center": true,
         "visible": false

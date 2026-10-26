@@ -199,6 +199,8 @@ export interface SkillRow {
 }
 
 export interface PersonaPreset {
+  sample?: string;
+  is_current?: boolean;
   id: string;
   name: string;
   description: string;

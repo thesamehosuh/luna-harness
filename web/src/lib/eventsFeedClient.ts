@@ -22,6 +22,7 @@ type CloseHandler = (code: number | undefined) => void
 
 export class EventsFeedClient extends JsonRpcGatewayClient {
   private readonly closeHandlers = new Set<CloseHandler>()
+  private ticketGeneration = 0
   private closeCode: number | null | undefined = undefined
 
   constructor() {
@@ -67,12 +68,18 @@ export class EventsFeedClient extends JsonRpcGatewayClient {
 
   /** Mint a fresh single-use ticket and dial `/api/events` for `channel`. */
   async connect(channel: string): Promise<void> {
+    const generation = ++this.ticketGeneration
     this.closeCode = null
     // Cover ticket minting with the same deadline as the handshake: a stalled
     // pre-socket request otherwise emits no close event and strands the retry
     // loop at its last "reconnecting in …" banner.
     const url = await withTimeout(buildWsUrl('/api/events', { channel }), EVENTS_CONNECT_TIMEOUT_MS)
+    if (generation !== this.ticketGeneration) throw new Error("events feed connection cancelled")
     await super.connect(url)
+  }
+  override close(): void {
+    this.ticketGeneration += 1
+    super.close()
   }
 }
 

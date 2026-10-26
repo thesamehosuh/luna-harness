@@ -10,6 +10,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Contract checks must import this checkout’s overlay, even when the chosen
+# engine interpreter has a different editable Luna deployment installed.
+export PYTHONPATH="$REPO_ROOT/luna/lib:$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+
 # Prefer the project venv over the system interpreter. The declared deps (fastapi, pyyaml, psutil)
 # live in .venv, and `python3 -m pytest` resolves to an interpreter that has none of them -- which
 # surfaces as a wall of collection errors that look like broken tests and are not. Set PYTHON to

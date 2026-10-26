@@ -1,6 +1,6 @@
 [package]
 name = "luna-launcher"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 description = "Luna — verified runtime bootstrap and local dashboard launcher"
 authors = ["Luna contributors", "Nous Research (vendored bootstrap)"]
 edition = "2021"

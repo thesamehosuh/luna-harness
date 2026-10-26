@@ -85,7 +85,7 @@ def test_write_soul_replaces_sections(home):
 
 def test_write_soul_text_applies_presets(home):
     presets = character.personas()
-    assert [p["id"] for p in presets] == ["current", "generic", "warm-friend"]
+    assert [p["id"] for p in presets] == ["current", "generic", "warm-friend", "dry-wit", "curious-mind"]
     soul = character.write_soul_text(next(p for p in presets if p["id"] == "warm-friend")["content"])
     assert "remembers" in soul["intro"].lower() or "friend" in soul["intro"].lower()
     with pytest.raises(Exception):

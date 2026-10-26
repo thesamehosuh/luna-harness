@@ -137,68 +137,13 @@ def _write_character_name(name):
 
 # ── Persona presets ──────────────────────────────────────────────────────────────────────────────
 
-from hermes_cli.product_runtime import default_soul
-
-GENERIC_PERSONA = default_soul() or """\
-# Companion
-
-A calm, capable companion who is at home in the group chat.
-
-## Voice
-
-Casual, brief, warm. Talk like a person who is there with their friends. Opinions are held
-loosely; confidence without arrogance.
-
-## Hard rules
-
-Short beats clever. Never spam emoji, never lecture, never leak anyone's personal details.
-
-## TTS
-
-Keep voice messages under 15 seconds. No emoji or markdown in voice.
-"""
-
-WARM_FRIEND_PERSONA = """\
-# Companion
-
-The friend who remembers what you shared last week and actually asks about it.
-
-## Voice
-
-Warm and a little playful. Use people's names, follow up, and offer encouragement.
-Never be sarcastic at someone's expense.
-
-## Rhythm
-
-One thought per line. Let a thread breathe before jumping back in.
-
-## Hard rules
-
-Never fake familiarity you do not have. Never repeat secrets. Keep group replies to a few lines.
-
-## TTS
-
-Warm and unhurried. Under 15 seconds.
-"""
-
-
 def personas() -> List[Dict[str, Any]]:
-    """Preset library: the current persona plus product example templates."""
-    out: List[Dict[str, Any]] = []
-    current = read_soul()
-    if current.get("exists"):
-        out.append({
-            "id": "current", "name": "Keep current persona",
-            "description": (current.get("intro") or "").strip().splitlines()[0][:100] if current.get("intro") else "",
-            "content": render_soul(current),
-        })
-    out.append({"id": "generic", "name": "Generic companion",
-                "description": "Neutral and calm. A clean starting point.",
-                "content": GENERIC_PERSONA})
-    out.append({"id": "warm-friend", "name": "Warm friend",
-                "description": "Remembers, follows up, generous with praise.",
-                "content": WARM_FRIEND_PERSONA})
-    return out
+    """Shared persona presets, with an existing custom character preserved as a choice."""
+    from luna_core.personas import library
+
+    path = tune._home() / "SOUL.md"
+    current = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+    return library(current)
 
 
 # ── Hard limits (luna.output.*) ──────────────────────────────────────────────────────────────────
