@@ -265,3 +265,6 @@ Honcho can follow the companion connection/model while using an independent reas
 The effort survives model changes and profile export/import. Provider default is the fresh-user
 default; native OpenCode exposes only that setting and rejects unsupported overrides explicitly.
 Codex subscriptions map selected effort through the engine's model-supported vocabulary.
+
+The native dashboard forwards HTTP(S) popup links to the system browser, including OAuth
+device-code/authorization pages. Popup webviews never inherit native launcher permissions.

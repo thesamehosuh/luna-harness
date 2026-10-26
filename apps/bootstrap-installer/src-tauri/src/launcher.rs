@@ -317,6 +317,13 @@ async fn start(app: tauri::AppHandle, state: &State, repair: bool) -> Result<()>
                     if url.origin() == origin { return true }
                     if matches!(url.scheme(), "https" | "http") { let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>); }
                     false
+                })
+                .on_new_window(|url, _| {
+                    // OAuth uses window.open; keep login in the system browser.
+                    if matches!(url.scheme(), "https" | "http") {
+                        let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>);
+                    }
+                    tauri::webview::NewWindowResponse::Deny
                 }).build();
             match window {
                 Ok(window) => {
