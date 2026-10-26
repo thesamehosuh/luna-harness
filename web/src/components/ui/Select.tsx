@@ -21,7 +21,9 @@ export function Select({ id, label, value, options, onValueChange, disabled, pla
 }) {
   return <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
     <SelectPrimitive.Trigger id={id} aria-label={label} className={cn("luna-select-trigger", className)}>
-      <SelectPrimitive.Value placeholder={placeholder} />
+      <SelectPrimitive.Value placeholder={placeholder}>
+        {options.find(option => option.value === value)?.label || value || placeholder}
+      </SelectPrimitive.Value>
       <SelectPrimitive.Icon><ChevronDown className="h-4 w-4" /></SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
     <SelectPrimitive.Portal>

@@ -1800,13 +1800,11 @@ _codex_oauth_context_cache: Dict[str, Tuple[Dict[str, int], float]] = {}
 # opted-in ``-900k`` bump reads it (#105443); a catalog without the field leaves the entry empty.
 _codex_oauth_max_context_cache: Dict[str, Dict[str, int]] = {}
 _CODEX_OAUTH_CONTEXT_CACHE_TTL = 3600  # 1 hour
-# The Codex models endpoint reads ``client_version`` as a Codex CLI compatibility version and
-# hides models whose ``minimal_client_version`` is newer, so a made-up version (the old
-# "1.0.0") silently drops future models. "0.0.0" is the backend's ungated sentinel returning
-# the full account catalog; other out-of-sequence values return an empty catalog and omitting
-# the parameter is HTTP 400.
-CODEX_UNGATED_CLIENT_VERSION = "0.0.0"
-CODEX_MODELS_CATALOG_URL = f"https://chatgpt.com/backend-api/codex/models?client_version={CODEX_UNGATED_CLIENT_VERSION}"
+# The catalog is client-version gated. Keep this compatibility version aligned with
+# Codex releases: 0.0.0 now returns a legacy catalog, silently hiding GPT-6 models.
+# Verified against the account-scoped catalog on 2026-10-26.
+CODEX_CATALOG_CLIENT_VERSION = "0.164.0"
+CODEX_MODELS_CATALOG_URL = f"https://chatgpt.com/backend-api/codex/models?client_version={CODEX_CATALOG_CLIENT_VERSION}"
 
 
 def _codex_oauth_token_fingerprint(access_token: str) -> str:

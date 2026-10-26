@@ -8,6 +8,7 @@ import { ReasoningPicker } from "@/components/ReasoningPicker";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import OpenCodeSetup from "@/components/OpenCodeSetup";
+import { GatewayControls } from "@/components/GatewayControls";
 import { useProfileScope } from "@/contexts/useProfileScope";
 import { api, type ModelInfoResponse } from "@/lib/api";
 import { errorMessage } from "@/lib/api-error";
@@ -48,6 +49,7 @@ export default function ControlCenterPage() {
   ) : [];
 
   return <div className="control-center space-y-7">
+    <GatewayControls key={profile} />
     <div className="flex flex-wrap items-start justify-between gap-5">
       <p className="max-w-lg text-sm leading-7 text-muted-foreground">Your model, connections and everyday settings, together.</p>
       <label className="control-search flex w-full items-center gap-2 rounded-control border border-border px-3 sm:w-72">
@@ -105,7 +107,7 @@ export default function ControlCenterPage() {
         <QuickLink to="/config" title="All settings" detail="Search the complete configuration when you need something specific." icon={Settings2} />
       </div>}
     </>}
-    {picker && <ModelPickerDialog alwaysGlobal onFreeModelSelected={() => { refresh(); setNotice("Free model saved. Your next chat will use it."); }} loader={() => api.getModelOptions(profile)} onClose={() => setPicker(false)} onApply={async ({ provider, model: next, confirmExpensiveModel }) => {
+    {picker && <ModelPickerDialog alwaysGlobal onFreeModelSelected={() => { refresh(); setNotice("Free model saved. Your next chat will use it."); }} loader={options => api.getModelOptions({ profile, ...options })} onClose={() => setPicker(false)} onApply={async ({ provider, model: next, confirmExpensiveModel }) => {
       const result = await api.setModelAssignment({ scope: "main", provider, model: next, confirm_expensive_model: confirmExpensiveModel }, profile);
       if (!result.confirm_required) { refresh(); setNotice("Model saved. Your next chat will use it."); }
       return result;

@@ -1,9 +1,9 @@
 // Importing the apps barrel registers the reference widget apps at startup.
 import '../sdk/apps/index.js'
 
-import { AlternateScreen, Box, NoSelect, ScrollBox, Text } from '@hermes/ink'
+import { AlternateScreen, Box, NoSelect, ScrollBox, Text, useStdout } from '@hermes/ink'
 import { useStore } from '@nanostores/react'
-import { Fragment, memo, type MutableRefObject, useEffect, useMemo, useRef } from 'react'
+import { Fragment, memo, type MutableRefObject, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useGateway } from '../app/gatewayContext.js'
 import type { AppLayoutProps } from '../app/interfaces.js'
@@ -205,9 +205,8 @@ const TranscriptPane = memo(function TranscriptPane({
               )}
 
               {row.msg.kind === 'intro' ? (
-                DASHBOARD_TUI_MODE ? <Box flexDirection="column" paddingY={2}>
-                  <Text bold color={ui.theme.color.text}>Start a conversation.</Text>
-                  <Text color={ui.theme.color.muted}>Type a message below. Your companion’s settings are in Control Center.</Text>
+                DASHBOARD_TUI_MODE ? <Box flexDirection="column" paddingY={1}>
+                  {firstUserIdx < 0 && <Text color={ui.theme.color.muted}>What’s on your mind?</Text>}
                 </Box> : <Box flexDirection="column" paddingTop={1}>
                   <Banner maxWidth={Math.max(1, composer.cols - 2)} t={ui.theme} />
 
@@ -491,6 +490,16 @@ const StatusRulePane = memo(function StatusRulePane({
 }: Pick<AppLayoutProps, 'composer' | 'status'> & { at: 'bottom' | 'top' }) {
   const ui = useStore($uiState)
 
+  if (DASHBOARD_TUI_MODE) {
+    if (at !== 'top') return null
+    const context = ui.usage.context_percent ?? 0
+    if (!ui.busy && !ui.compacting && !ui.notice && context < 80) return null
+    return <Box marginTop={1} paddingX={1} gap={2}>
+      <Text color={status.statusColor}>{ui.compacting ? 'Organizing conversation…' : ui.busy ? ui.status : ui.notice || ''}</Text>
+      {context >= 80 && <Text color={ui.theme.color.muted}>Context {Math.round(context)}%</Text>}
+    </Box>
+  }
+
   if (ui.statusBar !== at) {
     return null
   }
@@ -539,6 +548,15 @@ export const AppLayout = memo(function AppLayout({
   const overlay = useStore($overlayState)
   const ui = useStore($uiState)
 
+  const { stdout } = useStdout()
+  const [viewportRows, setViewportRows] = useState(stdout?.rows || 24)
+  useEffect(() => {
+    if (!stdout) return
+    const resize = () => setViewportRows(stdout.rows || 24)
+    stdout.on('resize', resize)
+    return () => { stdout.off('resize', resize) }
+  }, [stdout])
+
   const cursorSnapshotRef = useRef<InputCursorSnapshot | null>(null)
   useEffect(() => {
     cursorSnapshotRef.current = null
@@ -552,7 +570,7 @@ export const AppLayout = memo(function AppLayout({
 
   return (
     <Shell {...shellProps}>
-      <Box flexDirection="column" flexGrow={1} position="relative">
+      <Box flexDirection="column" flexGrow={1} minHeight={DASHBOARD_TUI_MODE && INLINE_MODE ? Math.max(1, viewportRows - 1) : undefined} position="relative">
         <Box flexDirection="row" flexGrow={1}>
           {!overlay.agents && !overlay.journey && <AmbientRail side="left" />}
           {overlay.agents ? (

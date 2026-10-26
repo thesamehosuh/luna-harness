@@ -446,3 +446,25 @@ cache signatures, transport identity and wake thresholds remain unchanged.
   skin/input-prompt marker for keyboard readiness. It no longer waits for the decorative CLI
   banner removed from embedded chat. Product imports also occur after binding the disposable home.
   Persona/runtime/PEOPLE context and response assertions remain.
+
+2026-10-26 onboarding hotfix:
+- `agent/model_metadata.py`, `hermes_cli/{codex_models,models}.py`: Codex catalog uses
+  the verified 0.164.0 compatibility version; 0.0.0 now returns a legacy catalog. The
+  version participates in the catalog cache fingerprint. Current general models are
+  available offline; account-gated Astra still requires live discovery.
+- `web/src/components/{ui/Select,ChatSidebar,GatewayControls}.tsx`,
+  `web/src/contexts/SystemActions.tsx`, `web/src/lib/gateway-lifecycle.ts`,
+  `web/src/pages/{OnboardingPage,ControlCenterPage,SystemPage}.tsx`: selected dropdown
+  labels survive disabled/save states; stable numbered steps; Telegram Save & connect
+  enables and connects the platform. Control Center exposes live gateway controls.
+  Start/stop/restart verify gateway state/process identity with a 30-second deadline;
+  a restart child becoming the foreground gateway no longer causes endless spinners.
+- `ui-tui/src/components/appLayout.tsx`, `web/src/pages/ChatPage.tsx`,
+  `web/src/index.css`, `agent/agent_init.py`: readable bounded chat canvas, bottom
+  composer, quiet embedded status, empty-state copy only before the first message,
+  and suppression of the embedded chat's one-time CLI compaction tutorial. The shared
+  Ink chat, actual compaction behavior and prompt cache remain intact.
+
+Focused validation: current live account catalog (IDs only), Codex catalog regressions,
+Telegram onboarding save/connect, dropdown persistence, foreground restart completion,
+stalled-request timeout, TypeScript and production dashboard/TUI builds.

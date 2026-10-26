@@ -45,6 +45,7 @@ import { useModalBehavior } from "@/hooks/useModalBehavior";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LunaConsoleModal } from "@/components/LunaConsoleModal";
 import { cn, themedBody } from "@/lib/utils";
+import { runGatewayAction } from "@/lib/gateway-lifecycle";
 import { api } from "@/lib/api";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import {
@@ -311,20 +312,14 @@ export default function SystemPage() {
   const runGateway = async (verb: "start" | "stop" | "restart"): Promise<boolean> => {
     setServedNotice(null);
     try {
-      if (verb === "start") {
-        await api.startGateway();
-        setActiveAction("gateway-start");
-      } else if (verb === "stop") {
-        await api.stopGateway();
-        setActiveAction("gateway-stop");
-      } else {
-        await api.restartGateway();
-        setActiveAction("gateway-restart");
-      }
-      showToast(`Gateway ${verb} started`, "success");
-      setTimeout(loadAll, 3000);
+      setActiveAction(`gateway-${verb}`);
+      await runGatewayAction(verb);
+      setActiveAction(null);
+      showToast(`Gateway ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"}`, "success");
+      loadAll();
       return true;
     } catch (e) {
+      setActiveAction(null);
       const refusal = servedProfileRefusal(e);
       if (refusal) {
         setServedNotice(refusal);
@@ -348,14 +343,6 @@ export default function SystemPage() {
     const bots = sharedGateway?.length ?? 0;
     const started = await runGateway("restart");
     if (!started) return;
-    for (let attempt = 0; attempt < 18; attempt += 1) {
-      await new Promise((r) => setTimeout(r, 1200));
-      const st = await api.getActionStatus("gateway-restart", 1).catch(() => null);
-      if (st && !st.running) {
-        if (st.exit_code != null && st.exit_code !== 0) return;
-        break;
-      }
-    }
     showToast(sharedGatewayRestartedMessage(bots), "success");
   };
 

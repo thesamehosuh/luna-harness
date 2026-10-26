@@ -356,8 +356,9 @@ html[dir="rtl"] {
 .control-search:focus-within { outline: 2px solid var(--color-ring); outline-offset: 3px; }
 .control-search input:focus-visible { outline: none; }
 .route-skeleton { min-height: 220px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-card); }
-.chat-heading { display: flex; align-items: center; gap: 12px; padding: 8px 0 20px; }
-.chat-toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px; padding-block: 8px; border-block: 1px solid var(--color-border); }
+.luna-chat { width: 100%; max-width: 1120px; margin-inline: auto; background: var(--chat-background, var(--color-background)); border-radius: var(--radius-panel); padding: 16px 22px; }
+.chat-heading { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
+.chat-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-block: 8px 12px; border-bottom: 1px solid var(--color-border); }
 .chat-model-controls { flex: 1; min-width: 0; }
 .chat-model-controls .text-display { letter-spacing: normal; }
 .chat-control-notice { display: flex; align-items: flex-start; gap: 8px; margin-block: 8px 2px; max-width: 700px; font-size: 12px; line-height: 1.8; color: var(--text-secondary); }
@@ -487,6 +488,7 @@ button:focus-visible, summary:focus-visible, .control-link:focus-visible, .contr
 .onboarding-steps > button[aria-current] { color: var(--color-primary); border-color: var(--color-primary); }
 .onboarding-steps > button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
 .onboarding-step-number { width: 1.65rem; height: 1.65rem; display: grid; place-items: center; flex-shrink: 0; border-radius: 50%; background: color-mix(in srgb, var(--color-muted-foreground) 10%, transparent); font-size: .75rem; }
+.onboarding-step-number[data-complete="true"] { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent); }
 [aria-current] > .onboarding-step-number { background: color-mix(in srgb, var(--color-primary) 15%, transparent); }
 .onboarding-connections { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
 .onboarding-connections > button, .onboarding-personas > button { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: .6rem; min-width: 0; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-control); text-align: left; color: var(--color-muted-foreground); background: transparent; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms; }

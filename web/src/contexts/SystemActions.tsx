@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { runGatewayAction } from "@/lib/gateway-lifecycle";
 import type { ActionStatusResponse } from "@/lib/api";
 import { Toast } from "@nous-research/ui/ui/components/toast";
 import { sharedGatewayProfiles, sharedGatewayRestartedMessage } from "@/lib/shared-gateway";
@@ -34,7 +35,7 @@ export function SystemActionsProvider({
   }, [toast]);
 
   useEffect(() => {
-    if (!activeAction) return;
+    if (!activeAction || activeAction === "restart") return;
     const name = ACTION_NAMES[activeAction];
     let cancelled = false;
 
@@ -45,18 +46,11 @@ export function SystemActionsProvider({
         setActionStatus(resp);
         if (!resp.running) {
           const ok = resp.exit_code === 0;
-          // A restart of the shared multiplexer reconnected every bot on the device: name the count.
-          const shared =
-            ok && activeAction === "restart"
-              ? sharedGatewayProfiles(await api.getStatus().catch(() => null))
-              : null;
           if (cancelled) return;
           setToast({
             type: ok ? "success" : "error",
             message: ok
-              ? shared
-                ? sharedGatewayRestartedMessage(shared.length)
-                : t.status.actionFinished
+              ? t.status.actionFinished
               : `${t.status.actionFailed} (exit ${resp.exit_code ?? "?"})`,
           });
           return;
@@ -79,8 +73,11 @@ export function SystemActionsProvider({
       setActionStatus(null);
       try {
         if (action === "restart") {
-          await api.restartGateway();
           setActiveAction(action);
+          const status = await runGatewayAction("restart");
+          setActionStatus({ name: "gateway-restart", running: false, exit_code: 0, pid: status.gateway_pid, lines: ["Gateway restarted"] });
+          const shared = sharedGatewayProfiles(status);
+          setToast({ type: "success", message: shared ? sharedGatewayRestartedMessage(shared.length) : "Gateway restarted" });
         } else {
           const resp = await api.updateLuna();
           // Some installs cannot apply updates from inside the dashboard. The
@@ -101,6 +98,7 @@ export function SystemActionsProvider({
           setActiveAction(action);
         }
       } catch (err) {
+        setActionStatus({ name: ACTION_NAMES[action], running: false, exit_code: 1, pid: null, lines: [] });
         const detail = err instanceof Error ? err.message : String(err);
         setToast({
           type: "error",

@@ -9,6 +9,7 @@ import { useToast } from "@nous-research/ui/hooks/use-toast";
 import { Toast } from "@nous-research/ui/ui/components/toast";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { errorMessage } from "@/lib/api-error";
+import { runGatewayAction } from "@/lib/gateway-lifecycle";
 import { api, getManagementProfile } from "@/lib/api";
 import OpenCodeSetup from "@/components/OpenCodeSetup";
 import { LunaMark } from "@/components/LunaMark";
@@ -68,6 +69,7 @@ export default function OnboardingPage() {
   const [apiKey, setApiKey] = useState("");
   const [wakeKey, setWakeKey] = useState("");
   const [telegram, setTelegram] = useState({ token: "", chatId: "", adminId: "" });
+  const [telegramResult, setTelegramResult] = useState("");
   const [personaId, setPersonaId] = useState("generic");
   const { toast, showToast } = useToast();
   const { setEnd } = usePageHeader();
@@ -177,6 +179,7 @@ export default function OnboardingPage() {
 
   const saveTelegram = async () => {
     setBusy("telegram");
+    setTelegramResult("Saving Telegram…");
     try {
       if (telegram.token.trim()) {
         await api.setEnvVar("TELEGRAM_BOT_TOKEN", telegram.token.trim());
@@ -200,10 +203,23 @@ export default function OnboardingPage() {
           ? { luna: { notify: { operator_chat: { telegram: admin } } } }
           : {}),
       });
-      setTelegram({ ...telegram, token: "" });
-      showToast("Telegram settings saved (restart the gateway to connect)", "success");
+      await api.updateMessagingPlatform("telegram", { enabled: true });
+      setTelegram(previous => ({ ...previous, token: "" }));
+      setTelegramResult("Connecting Telegram…");
+      const status = await api.getStatus();
+      await runGatewayAction(status.gateway_running ? "restart" : "start");
+      let connected = false;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise(resolve => window.setTimeout(resolve, 1000));
+        const result = await api.testMessagingPlatform("telegram");
+        if (result.ok) { connected = true; break; }
+        if (["fatal", "startup_failed"].includes(result.state)) throw new Error(result.message);
+      }
+      setTelegramResult(connected ? "Telegram connected. Send your bot a message." : "Settings saved. Telegram is still connecting — check its status in Connections.");
+      showToast(connected ? "Telegram connected" : "Telegram settings saved; connection not confirmed yet", connected ? "success" : "error");
       await refresh();
     } catch (e) {
+      setTelegramResult(errorMessage(e));
       showToast(errorMessage(e), "error");
     } finally {
       setBusy(null);
@@ -300,7 +316,7 @@ export default function OnboardingPage() {
           aria-label={`${index + 1}. ${STEP_UI[step.id]?.label || step.title}`}
           aria-current={step.id === currentId ? "step" : undefined} disabled={busy !== null}
           onClick={() => goTo(step.id)}>
-          <span className="onboarding-step-number">{step.status === "done" ? <Check className="h-4 w-4" /> : index + 1}</span>
+          <span className="onboarding-step-number" data-complete={step.status === "done"}>{index + 1}</span>
           <span>{STEP_UI[step.id]?.label || step.title}</span>
         </button>)}
       </nav>
@@ -308,9 +324,9 @@ export default function OnboardingPage() {
       <div className="mb-5 mt-9 flex items-center justify-between gap-3">
         <h1 ref={heading} tabIndex={-1} className="luna-page-title text-3xl outline-none sm:text-4xl">{STEP_UI[currentId || ""]?.title || current?.title || "Set up Luna"}</h1>
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}
-        {current?.status === "done" && <span className="flex items-center gap-1.5 text-xs text-success"><Check className="h-4 w-4" />Ready</span>}
+        {current?.status === "done" && <span className="text-xs text-success">{current.id === "telegram" ? "Saved" : "Ready"}</span>}
       </div>
-      {current && <Card id={`step-${current.id}`}>
+      {current && <Card key={current.id} id={`step-${current.id}`}>
         <CardContent className="p-5 sm:p-7">
           {skipped ? <div className="flex items-center justify-between gap-3 py-5">
             <span className="text-sm text-muted-foreground">Skipped for now</span>
@@ -353,12 +369,13 @@ export default function OnboardingPage() {
           </div>}
           {current.id === "telegram" && <div className="space-y-5">
             <div className="flex items-center justify-between gap-3"><label htmlFor="telegram-setup-token" className="text-sm font-medium">Bot token</label><a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="onboarding-quiet-link">Create a bot ↗</a></div>
-            <div className="onboarding-token-row"><MessageCircle className="h-5 w-5 text-primary" aria-hidden="true" /><input id="telegram-setup-token" aria-label="Bot token" className={inputClass} type="password" autoComplete="off" placeholder="123456:ABC…" value={telegram.token} onChange={event => setTelegram({ ...telegram, token: event.target.value })} /></div>
+            <div className="onboarding-token-row"><MessageCircle className="h-5 w-5 text-primary" aria-hidden="true" /><input id="telegram-setup-token" aria-label="Bot token" className={inputClass} type="password" autoComplete="off" placeholder={current.token_present ? "Bot token saved securely" : "123456:ABC…"} value={telegram.token} onChange={event => setTelegram({ ...telegram, token: event.target.value })} /></div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Your Telegram user ID · default admin"><input className={inputClass} inputMode="numeric" placeholder="123456789" value={telegram.adminId} onChange={event => setTelegram({ ...telegram, adminId: event.target.value })} /></Field>
               <Field label="Group chat ID"><input className={inputClass} inputMode="text" placeholder="-100…" value={telegram.chatId} onChange={event => setTelegram({ ...telegram, chatId: event.target.value })} /></Field>
             </div>
-            <div className="onboarding-card-actions"><Link to="/channels" className="onboarding-quiet-link">Pair a chat<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={saveTelegram} disabled={busy !== null || !/^[1-9]\d*$/.test(telegram.adminId.trim()) || !/^-[1-9]\d*$/.test(telegram.chatId.trim()) || (!telegram.token.trim() && current.token_present !== true)}>Save Telegram</Button></div>
+            <div className="onboarding-card-actions"><Link to="/channels" className="onboarding-quiet-link">Connections<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={saveTelegram} disabled={busy !== null || !/^[1-9]\d*$/.test(telegram.adminId.trim()) || !/^-[1-9]\d*$/.test(telegram.chatId.trim()) || (!telegram.token.trim() && current.token_present !== true)}>{busy === "telegram" ? "Connecting…" : "Save & connect"}</Button></div>
+            {telegramResult && <p role="status" className="text-sm text-muted-foreground">{telegramResult}</p>}
           </div>}
           {current.id === "honcho" && <div className="space-y-5">
             <MemoryReasoningSelector key={modelRevision} compact />

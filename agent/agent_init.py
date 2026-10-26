@@ -2134,6 +2134,7 @@ def _emit_compression_summary(agent, cs):
         # re-notifies once. The config display gate (compression.codex_gpt55_autoraise_notice) still
         # suppresses the banner entirely without disabling the threshold autoraise. See #54432.
         bool(_autoraise)
+        and os.environ.get("HERMES_PTY_HOST") != "dashboard"
         and cs.enabled
         and cs.autoraise_notice_enabled
         and not _codex_gpt55_autoraise_notice_seen(_autoraise)

@@ -1,3 +1,16 @@
+# Luna 0.1.0-alpha.5
+
+Onboarding and gateway hotfix.
+
+- Current Codex models appear in every picker; Refresh Models updates the catalog.
+- Gateway status and Start/Stop/Restart controls sit at the top of Control Center.
+- Restart finishes when the new gateway is running, with a bounded failure state.
+- Telegram setup saves, enables and connects the bot, then verifies its connection.
+- Stable numbered setup steps and dropdown labels that stay visible during save/test.
+- A quieter chat canvas with an anchored composer and less terminal status clutter.
+
+Your saved character, accounts, Telegram settings and memories are retained.
+
 # Luna 0.1.0-alpha.4
 
 A redesigned launcher and a simpler dashboard setup flow.

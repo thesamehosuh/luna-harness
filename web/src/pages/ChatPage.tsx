@@ -1784,7 +1784,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     </div>, portalRoot,
   );
 
-  return <div className="luna-chat flex min-h-0 flex-1 flex-col">
+  return <div className="luna-chat flex min-h-0 flex-1 flex-col" style={{ "--chat-background": terminalBg } as import("react").CSSProperties}>
     <PluginSlot name="chat:top" />
     {mobilePortal}
     <div className="chat-heading">
@@ -1797,7 +1797,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       <Button ghost size="sm" disabled={!lastResponse || copyState === "copying"} onClick={() => void handleCopyLast()} aria-label="Copy last assistant response" title="Copy last response" className="chat-copy-button" prefix={copyState === "copied" ? <Check /> : <Copy />}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy"}</Button>
     </div>
     {visibleBanner && <div role="alert" className="mx-1 mt-2 flex flex-wrap items-center gap-3 rounded-control border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"><span className="min-w-0 flex-1">{visibleBanner}</span>{banner && bannerAction === "reload" && <Button size="sm" outlined onClick={() => window.location.reload()}>Reload page</Button>}</div>}
-    <div className="flex min-h-0 flex-1 gap-5 pt-4">
+    <div className="flex min-h-0 flex-1 gap-5 pt-2">
       <div ref={termWrapRef} className="chat-canvas relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" style={{ backgroundColor: terminalBg, "--chat-background": terminalBg } as import("react").CSSProperties}>
         <div ref={hostRef} className="hermes-chat-xterm-host min-h-0 min-w-0 flex-1" />
         {(ptyState === "connecting" || showResumeLoadingOverlay) && <div role="status" className="pointer-events-none absolute inset-x-4 top-4 flex justify-center"><span className="rounded-control border border-border bg-card px-4 py-2 text-sm text-muted-foreground">{showResumeLoadingOverlay ? PTY_RESUME_LOADING_MESSAGE : "Opening your conversation…"}</span></div>}

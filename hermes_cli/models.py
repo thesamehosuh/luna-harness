@@ -1697,6 +1697,9 @@ def _credential_fingerprint(provider: str) -> str:
     import hashlib
 
     parts: list[str] = []
+    if provider == "openai-codex":
+        from agent.model_metadata import CODEX_CATALOG_CLIENT_VERSION
+        parts.append(f"catalog-version={CODEX_CATALOG_CLIENT_VERSION}")
     try:
         from hermes_cli.auth import PROVIDER_REGISTRY
         pcfg = PROVIDER_REGISTRY.get(provider)

@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  soul: vi.fn(), report: vi.fn(), choice: vi.fn(), assign: vi.fn(), env: vi.fn(), config: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
+  soul: vi.fn(), report: vi.fn(), choice: vi.fn(), assign: vi.fn(), env: vi.fn(), config: vi.fn(), platform: vi.fn(), status: vi.fn(), start: vi.fn(), connection: vi.fn(), actionStatus: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
 }));
 vi.mock("@/contexts/usePageHeader", () => ({ usePageHeader: () => ({ setEnd: mocks.setEnd }) }));
 vi.mock("@nous-research/ui/hooks/use-toast", () => ({ useToast: () => ({ showToast: mocks.showToast }) }));
@@ -14,7 +14,7 @@ vi.mock("@/lib/luna-onboarding", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/luna-onboarding")>(),
   onboardingApi: { get: mocks.report, choice: mocks.choice, personas: async () => ({ personas: [{ id: "generic", name: "Companion", description: "A fixture", content: "# Fixture persona" }] }) },
 }));
-vi.mock("@/lib/api", () => ({ getManagementProfile: () => "test-profile", api: { updateProfileSoul: mocks.soul, setModelAssignment: mocks.assign, getModelOptions: vi.fn(), setEnvVar: mocks.env, saveConfig: mocks.config } }));
+vi.mock("@/lib/api", () => ({ getManagementProfile: () => "test-profile", api: { updateProfileSoul: mocks.soul, setModelAssignment: mocks.assign, getModelOptions: vi.fn(), setEnvVar: mocks.env, saveConfig: mocks.config, updateMessagingPlatform: mocks.platform, getStatus: mocks.status, startGateway: mocks.start, testMessagingPlatform: mocks.connection, getActionStatus: mocks.actionStatus } }));
 vi.mock("@/components/OpenCodeSetup", () => ({ default: () => <div>Free model setup</div> }));
 vi.mock("@/components/OAuthProvidersCard", () => ({ OAuthProvidersCard: () => <div>Browser account login</div> }));
 vi.mock("@/components/MemoryReasoningSelector", () => ({ MemoryReasoningSelector: () => <div>Independent memory model settings</div> }));
@@ -76,7 +76,7 @@ it("applies the selected persona to the active profile", async () => {
 it("requires owner and group IDs and grants the default admin DM access without removing existing users", async () => {
   mocks.report.mockResolvedValue({ steps: [...steps, { id: "telegram", title: "Telegram", status: "todo", detail: "", token_present: true, allowed_user_ids: ["234567"], groups: ["-100234567"], admin_ids: ["234567"], group_admin_ids: ["234567"] }] });
   await click("Check setup"); await click("4. Telegram");
-  const save = [...host.querySelectorAll("button")].find(el => el.textContent === "Save Telegram")!;
+  const save = [...host.querySelectorAll("button")].find(el => el.textContent === "Save & connect")!;
   async function fill(label: string, value: string) {
     const input = [...host.querySelectorAll("label")].find(el => el.textContent?.includes(label))?.querySelector("input");
     expect(input).toBeTruthy();
@@ -85,13 +85,23 @@ it("requires owner and group IDs and grants the default admin DM access without 
       input!.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
+  vi.useFakeTimers();
+  mocks.status.mockResolvedValueOnce({ gateway_running: false }).mockResolvedValueOnce({ gateway_running: false }).mockResolvedValue({ gateway_running: true, gateway_pid: 42, gateway_state: "running" });
+  mocks.start.mockResolvedValue({ name: "gateway-start" });
+  mocks.actionStatus.mockResolvedValue({ running: true });
+  mocks.connection.mockResolvedValue({ ok: true, state: "connected" });
   await fill("Your Telegram user ID", "not-a-user");
   expect(save.disabled).toBe(true);
   await fill("Your Telegram user ID", "345678");
   await fill("Group chat ID", "345678");
   expect(save.disabled).toBe(true);
   await fill("Group chat ID", "-100345678");
-  await click("Save Telegram");
+  await click("Save & connect");
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  vi.useRealTimers();
+  expect(mocks.platform).toHaveBeenCalledWith("telegram", { enabled: true });
+  expect(mocks.start).toHaveBeenCalledOnce();
+  expect(host.textContent).toContain("Telegram connected. Send your bot a message.");
   expect(mocks.env).toHaveBeenCalledWith("TELEGRAM_ALLOWED_USERS", "234567,345678");
   expect(mocks.env).not.toHaveBeenCalledWith("TELEGRAM_BOT_TOKEN", expect.anything());
   expect(mocks.config).toHaveBeenCalledWith(expect.objectContaining({ telegram: {
