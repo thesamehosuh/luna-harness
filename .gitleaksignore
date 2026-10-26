@@ -756,3 +756,14 @@ b47d7fced5850313fa8d820fecec9943c09b232f:tests/tools/test_terminal_tool_exceptio
 b47d7fced5850313fa8d820fecec9943c09b232f:tests/tui_gateway/test_diagnostics_share_nous.py:generic-api-key:114
 b47d7fced5850313fa8d820fecec9943c09b232f:tests/tui_gateway/test_diagnostics_share_nous.py:generic-api-key:66
 b47d7fced5850313fa8d820fecec9943c09b232f:tests/tui_gateway/test_diagnostics_share_nous.py:generic-api-key:83
+
+# Same reviewed non-credential fixture fragments, with their squash-merge fingerprints.
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/acp_adapter/test_acp_logging_redaction.py:generic-api-key:12
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/agent/test_redact.py:generic-api-key:568
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/gateway/test_api_server.py:generic-api-key:767
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/hermes_cli/test_sessions_export_md_cli.py:generic-api-key:73
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/tools/test_terminal_output_transform_hook.py:generic-api-key:75
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/tools/test_terminal_tool_exception_redaction.py:generic-api-key:13
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/tui_gateway/test_diagnostics_share_nous.py:generic-api-key:114
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/tui_gateway/test_diagnostics_share_nous.py:generic-api-key:66
+bdb4cba793a39236e6e145e4f11fff9e682a78a2:tests/tui_gateway/test_diagnostics_share_nous.py:generic-api-key:83
