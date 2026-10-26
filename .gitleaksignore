@@ -747,6 +747,7 @@
 111edac7045c84385773294530ffb396c309509d:website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/guides/team-telegram-assistant.md:luna-telegram-token:50
 
 # Partial, non-credential redaction fixture strings after splitting the old literals.
+04a211b9a541ea4e512ca4ca349844c41254768b:luna/docs/engine-vendor.md:generic-api-key:489
 b47d7fced5850313fa8d820fecec9943c09b232f:tests/acp_adapter/test_acp_logging_redaction.py:generic-api-key:12
 b47d7fced5850313fa8d820fecec9943c09b232f:tests/agent/test_redact.py:generic-api-key:568
 b47d7fced5850313fa8d820fecec9943c09b232f:tests/gateway/test_api_server.py:generic-api-key:767

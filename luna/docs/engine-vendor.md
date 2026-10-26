@@ -448,7 +448,7 @@ cache signatures, transport identity and wake thresholds remain unchanged.
   Persona/runtime/PEOPLE context and response assertions remain.
 
 2026-10-26 onboarding hotfix:
-- `agent/model_metadata.py`, `hermes_cli/{codex_models,models}.py`: Codex catalog uses
+- `agent/model_metadata.py`, `hermes_cli/codex_models.py`, `hermes_cli/models.py`: Codex catalog uses
   the verified 0.164.0 compatibility version; 0.0.0 now returns a legacy catalog. The
   version participates in the catalog cache fingerprint. Current general models are
   available offline; account-gated Astra still requires live discovery.

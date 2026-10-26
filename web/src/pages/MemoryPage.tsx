@@ -75,7 +75,7 @@ export default function MemoryPage() {
         </dl>
         <Button outlined size="sm" disabled={busy || !report.status.enabled} onClick={async () => {
           setBusy(true); setError("");
-          try { await fetchJSON("/api/luna/data/verify-memory", { method: "POST" }); await load(); }
+          try { await fetchJSON("/api/luna/data/verify-memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); await load(); }
           catch (e) { setError(errorMessage(e)); }
           finally { setBusy(false); }
         }}>{busy ? "Working…" : "Check memory connection"}</Button>
