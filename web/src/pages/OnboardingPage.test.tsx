@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  soul: vi.fn(), report: vi.fn(), choice: vi.fn(), assign: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
+  soul: vi.fn(), report: vi.fn(), choice: vi.fn(), assign: vi.fn(), env: vi.fn(), config: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
 }));
 vi.mock("@/contexts/usePageHeader", () => ({ usePageHeader: () => ({ setEnd: mocks.setEnd }) }));
 vi.mock("@nous-research/ui/hooks/use-toast", () => ({ useToast: () => ({ showToast: mocks.showToast }) }));
@@ -14,7 +14,7 @@ vi.mock("@/lib/luna-onboarding", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/luna-onboarding")>(),
   onboardingApi: { get: mocks.report, choice: mocks.choice, personas: async () => ({ personas: [{ id: "generic", name: "Companion", description: "A fixture", content: "# Fixture persona" }] }) },
 }));
-vi.mock("@/lib/api", () => ({ getManagementProfile: () => "test-profile", api: { updateProfileSoul: mocks.soul, setModelAssignment: mocks.assign, getModelOptions: vi.fn() } }));
+vi.mock("@/lib/api", () => ({ getManagementProfile: () => "test-profile", api: { updateProfileSoul: mocks.soul, setModelAssignment: mocks.assign, getModelOptions: vi.fn(), setEnvVar: mocks.env, saveConfig: mocks.config } }));
 vi.mock("@/components/OpenCodeSetup", () => ({ default: () => <div>Free model setup</div> }));
 vi.mock("@/components/OAuthProvidersCard", () => ({ OAuthProvidersCard: () => <div>Browser account login</div> }));
 vi.mock("@/components/MemoryReasoningSelector", () => ({ MemoryReasoningSelector: () => <div>Independent memory model settings</div> }));
@@ -40,7 +40,7 @@ beforeEach(async () => {
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
 async function click(text: string) {
-  const button = [...host.querySelectorAll("button")].find(el => el.textContent === text);
+  const button = [...host.querySelectorAll("button")].find(el => (el.textContent === text || el.getAttribute("aria-label") === text));
   expect(button, text).toBeTruthy();
   await act(async () => button!.click());
 }
@@ -57,8 +57,7 @@ it("shows one step, supports back/next, and persists optional skips", async () =
   expect(host.textContent).toContain("Free model setup");
 });
 it("offers browser subscription login and assigns the live picker selection with price confirmation", async () => {
-  const select = host.querySelector("select")!;
-  await act(async () => { select.value = "Subscription / connected account"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await click("Sign in");
   expect(host.textContent).toContain("Browser account login");
   expect(host.querySelector('input[type="password"]')).toBeNull();
   await click("Choose companion model");
@@ -71,4 +70,31 @@ it("applies the selected persona to the active profile", async () => {
   await click("3. Character");
   await click("Apply persona");
   expect(mocks.soul).toHaveBeenCalledWith("test-profile", "# Fixture persona");
+});
+
+
+it("requires owner and group IDs and grants the default admin DM access without removing existing users", async () => {
+  mocks.report.mockResolvedValue({ steps: [...steps, { id: "telegram", title: "Telegram", status: "todo", detail: "", token_present: true, allowed_user_ids: ["234567"], groups: ["-100234567"], admin_ids: ["234567"], group_admin_ids: ["234567"] }] });
+  await click("Check setup"); await click("4. Telegram");
+  const save = [...host.querySelectorAll("button")].find(el => el.textContent === "Save Telegram")!;
+  async function fill(label: string, value: string) {
+    const input = [...host.querySelectorAll("label")].find(el => el.textContent?.includes(label))?.querySelector("input");
+    expect(input).toBeTruthy();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  await fill("Your Telegram user ID", "not-a-user");
+  expect(save.disabled).toBe(true);
+  await fill("Your Telegram user ID", "345678");
+  await fill("Group chat ID", "345678");
+  expect(save.disabled).toBe(true);
+  await fill("Group chat ID", "-100345678");
+  await click("Save Telegram");
+  expect(mocks.env).toHaveBeenCalledWith("TELEGRAM_ALLOWED_USERS", "234567,345678");
+  expect(mocks.env).not.toHaveBeenCalledWith("TELEGRAM_BOT_TOKEN", expect.anything());
+  expect(mocks.config).toHaveBeenCalledWith(expect.objectContaining({ telegram: {
+    group_allowed_chats: ["-100234567", "-100345678"], allow_admin_from: ["234567", "345678"], group_allow_admin_from: ["234567", "345678"],
+  } }));
 });

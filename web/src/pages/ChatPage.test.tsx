@@ -85,6 +85,7 @@ class FakeTerminal {
 const maybeReloadForLoopbackWsAuthFailure = vi.fn(() => false);
 const apiMocks = vi.hoisted(() => ({
   buildWsUrl: vi.fn(async () => "ws://localhost/api/pty?channel=chat-1"),
+  getSessionMessages: vi.fn(async () => ({ messages: [{ role: "assistant", content: "Saved response" }] })),
 }));
 const uploadChatImage = vi.hoisted(() =>
   vi.fn(async () => ({ path: "/tmp/pasted.png" })),
@@ -101,7 +102,7 @@ vi.mock("@xterm/addon-web-links", () => ({ WebLinksAddon: class {} }));
 vi.mock("@xterm/addon-webgl", () => ({ WebglAddon: FakeWebglAddon }));
 vi.mock("@xterm/xterm", () => ({ Terminal: FakeTerminal }));
 vi.mock("@/components/ChatSidebar", () => ({
-  ChatSidebar: () => null,
+  ChatSidebar: ({ onAssistantResponse }: { onAssistantResponse: (text: string) => void }) => <button onClick={() => onAssistantResponse("Completed response")}>Simulate completion</button>,
 }));
 vi.mock("@/components/ChatSessionList", () => ({
   ChatSessionList: () => null,
@@ -546,6 +547,7 @@ describe("ChatPage side panel collapse", () => {
 
   it("collapses the desktop side panel and persists the choice", async () => {
     localStorage.clear();
+    localStorage.setItem("hermes-chat-panel-collapsed", "0");
     await renderChat();
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
 
@@ -666,5 +668,25 @@ describe("ChatPage PTY ticket connect deadline", () => {
     // force-close a wedged handshake — the two must not both fire.
     await advance(PTY_TICKET_TIMEOUT_MS);
     expect(apiMocks.buildWsUrl).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("ChatPage response copy", () => {
+  it("copies the completed response without sending any command or Return to the composer", async () => {
+    const copy = vi.fn(async () => undefined);
+    Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: copy } });
+    const { default: ChatPage } = await import("./ChatPage");
+    await render(<MemoryRouter initialEntries={["/chat"]}><ChatPage isActive /></MemoryRouter>);
+    await act(async () => FakeWebSocket.instances[0].onopen?.());
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Copy last assistant response"]')!;
+    expect(button.disabled).toBe(true);
+    await act(async () => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Simulate completion')!.click());
+    const before = FakeWebSocket.instances[0].send.mock.calls.length;
+    await act(async () => button.click());
+    expect(copy).toHaveBeenCalledWith("Completed response");
+    expect(FakeWebSocket.instances[0].send.mock.calls).toHaveLength(before);
+    expect(button.textContent).toBe("Copied");
   });
 });

@@ -14,13 +14,14 @@
       {
         "label": "main",
         "title": "Luna",
-        "width": 880,
-        "height": 780,
-        "minWidth": 720,
+        "width": 960,
+        "height": 700,
+        "minWidth": 620,
         "minHeight": 520,
         "resizable": true,
         "fullscreen": false,
-        "decorations": true,
+        "decorations": false,
+        "backgroundColor": "#17132b",
         "transparent": false,
         "center": true,
         "visible": false

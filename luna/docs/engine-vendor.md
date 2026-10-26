@@ -398,3 +398,47 @@ Security and guided setup (2026-10-26):
 - `web/src/components/OAuthProvidersCard.tsx` defaults to browser-supported account flows,
   with terminal instructions and token previews omitted from guided account setup.
   Persona application in Setup targets the selected management profile.
+
+Desktop interaction polish (2026-10-26):
+- `web/src/App.tsx`, `web/src/lib/navigation.ts`, `web/src/pages/ControlCenterPage.tsx`:
+  common model/account/key controls are gathered above companion navigation; management
+  routes remain available in More. Chat's persistent terminal lifetime is unchanged.
+- `web/src/components/ChatSidebar.tsx`, `web/src/lib/eventsFeedClient.ts`,
+  `web/src/pages/ChatPage.tsx`, `web/src/components/ModelReloadConfirm.tsx`:
+  the toolbar subscribes to the actual chat rather than spawning a second agent. Completed
+  replies copy directly to the clipboard without typing into the composer. New model
+  confirmation starts a fresh chat. Pending event tickets cannot open after unmount.
+  Bounded reconnect/auth handling, profile scoping and stored conversation identity remain.
+- `web/src/pages/{EnvPage,OnboardingPage}.tsx`, `web/src/components/ui/{Button,Input,Card}.tsx`,
+  `web/src/index.css`: searchable keys, configured advanced keys remain visible, collapsed
+  optional categories, flat provider rows, inherited card corners and shared interaction
+  feedback. Native canvas stays opaque; document crossfades and selection-driven root
+  style mutations are removed. Native chat uses the DOM terminal renderer to avoid an
+  additional WebGL compositor. Text stays at least 13px with readable line spacing.
+- `ui-tui/src/components/appLayout.tsx`: embedded dashboard chat gets a short empty state;
+  standalone terminal intro remains intact. The shared Ink transcript/composer is retained.
+- `apps/bootstrap-installer/`: frameless launcher, verified-byte progress with transfer totals,
+  elapsed setup checklist, cancellable stalled network operations, and an anchored settings
+  drop-up. macOS retains its native application menu; other platforms retain tray controls.
+  Window-control permissions are limited to the bundled installer, never the dashboard.
+
+Regression coverage: ChatSidebar/ChatPage component suites and native cancellation tests.
+No dynamic prompt, cache key, companion memory policy, identity, or wake thresholds change.
+
+Desktop polish follow-up:
+- `web/src/components/{ModelPickerDialog,OpenCodeSetup,OAuthProvidersCard,MemoryReasoningSelector}.tsx`,
+  `web/src/components/ui/Select.tsx`, `web/package.json`, `package-lock.json`: connected models
+  first, in-app connection actions, retained price confirmation, themed portalled dropdowns and
+  compact guided account/model controls. Unauthenticated models cannot be applied.
+- `web/src/components/AppearanceSettings.tsx`, `web/src/pages/{CharacterPage,ControlCenterPage}.tsx`:
+  chat palettes move to Preferences, with guarded drafts and advanced individual colors.
+- `web/src/pages/OnboardingPage.tsx`: compact steps, visible Telegram owner/group fields,
+  default-admin DM access and preserved existing grants; persona previews use the shared library.
+  `web/src/lib/{luna-api,luna-onboarding}.ts` carry preset samples/current selection metadata.
+- Dashboard regression suites cover active-profile persona application, optional skips, default
+  admin transport access, independent draft saves, passive chat subscription and price confirmation.
+- `scripts/test.sh` and `scripts/test-contract.sh` put this checkout's overlay first on PYTHONPATH
+  so a legacy editable installation cannot silently supply the engine contract imports.
+
+Persona template changes apply to new installs or explicit preset selection. Per-turn sidecars,
+cache signatures, transport identity and wake thresholds remain unchanged.

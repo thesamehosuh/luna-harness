@@ -154,6 +154,8 @@ async function render(ui: ReactNode) {
 }
 
 beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  gatewayMocks.constructed = 0
   FakeWebSocket.instances = []
   vi.clearAllMocks()
   apiMocks.buildWsUrl.mockReset()
@@ -415,9 +417,7 @@ describe('ChatSidebar event socket reconnect', () => {
     // The banner is shared, so a blind `setError(null)` on reconnect would
     // hide a real problem the user needs to see.
     await act(async () => {
-      gatewayMocks.handlers.get('error')?.({
-        payload: { message: 'ANTHROPIC_API_KEY is not set' }
-      })
+      FakeWebSocket.instances.at(-1)!.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'session.info', payload: { credential_warning: 'ANTHROPIC_API_KEY is not set' } } }) })
     })
 
     await act(async () => {
@@ -427,14 +427,12 @@ describe('ChatSidebar event socket reconnect', () => {
     expect(container.textContent).toContain('ANTHROPIC_API_KEY is not set')
   })
 
-  it('does not overwrite a sidecar error when the feed drops', async () => {
+  it('does not overwrite a credential warning when the feed drops', async () => {
     await renderSidebar()
 
     // A sidecar error is already on the banner...
     await act(async () => {
-      gatewayMocks.handlers.get('error')?.({
-        payload: { message: 'ANTHROPIC_API_KEY is not set' }
-      })
+      FakeWebSocket.instances.at(-1)!.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'session.info', payload: { credential_warning: 'ANTHROPIC_API_KEY is not set' } } }) })
     })
 
     // ...when the events feed drops. `error` is that message's only home,
@@ -453,49 +451,22 @@ describe('ChatSidebar event socket reconnect', () => {
     expect(container.textContent).not.toContain('Live tool activity paused')
   })
 
-  it('offers Add key and Switch model when the gateway reports a missing key', async () => {
+  it('routes missing credentials to Control Center without navigating the chat document', async () => {
     await renderSidebar()
-
     await act(async () => {
-      gatewayMocks.handlers.get('session.info')?.({
-        payload: {
-          credential_warning: "No API key configured for provider 'openrouter'. First message will fail."
-        }
-      })
+      FakeWebSocket.instances[0].emit('message', { data: JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'session.info', payload: { credential_warning: "No API key configured for provider 'openrouter'. First message will fail." } } }) })
     })
-
     expect(container.textContent).toContain('No API key set for openrouter')
-    expect(container.textContent).not.toContain('First message will fail')
-    const buttons = Array.from(container.querySelectorAll('button'))
-    const labels = buttons.map(b => b.textContent?.trim())
-    expect(labels).toContain('Add key')
-    expect(labels).toContain('Switch model')
-
-    // Add key must be an in-app route change: a full page load would tear down
-    // the terminal scrollback and the chat sockets.
-    await act(async () => {
-      buttons.find(b => b.textContent?.trim() === 'Add key')?.click()
-    })
-    expect(routerMocks.navigate).toHaveBeenCalledWith('/env')
-  })
-
-  it('explains that only the side panel is affected when the sidecar cannot connect', async () => {
-    gatewayMocks.connect.mockRejectedValueOnce(new Error('WebSocket connection failed'))
-    await renderSidebar()
-
-    await vi.waitFor(() => expect(container.textContent).toContain('Chat still works'))
-    expect(container.textContent).not.toContain('WebSocket')
-    const labels = Array.from(container.querySelectorAll('button')).map(b => b.textContent?.trim())
-    expect(labels).toContain('Reconnect side panel')
+    const button = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Connections')
+    await act(async () => button!.click())
+    expect(routerMocks.navigate).toHaveBeenCalledWith('/controls#model')
   })
 
   it('still reconnects while a foreign banner suppresses its message', async () => {
     await renderSidebar()
 
     await act(async () => {
-      gatewayMocks.handlers.get('error')?.({
-        payload: { message: 'ANTHROPIC_API_KEY is not set' }
-      })
+      FakeWebSocket.instances.at(-1)!.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'session.info', payload: { credential_warning: 'ANTHROPIC_API_KEY is not set' } } }) })
     })
     await act(async () => {
       FakeWebSocket.instances[0].emit('close', { code: 1006 })
@@ -506,29 +477,32 @@ describe('ChatSidebar event socket reconnect', () => {
     expect(FakeWebSocket.instances).toHaveLength(2)
   })
 
-  it('reuses one JSON-RPC client across reconnects so seq replay can fire', async () => {
-    // The shared client only asks `session.events.since` for the gap when the
-    // instance that recorded the watermarks is the one that redials.
-    gatewayMocks.constructed = 0
-    await renderSidebar()
-    expect(gatewayMocks.constructed).toBe(1)
-    expect(gatewayMocks.connect).toHaveBeenCalledTimes(1)
-
-    // Drop the feed so the banner (and its reconnect button) renders.
+  it('only subscribes to events and never creates an agent session', async () => {
+    const onResponse = vi.fn(), onId = vi.fn(), onTitle = vi.fn()
+    const { ChatSidebar } = await import('./ChatSidebar')
+    await render(<ChatSidebar channel="chat-1" onAssistantResponse={onResponse} onSessionIdChange={onId} onSessionTitleChange={onTitle} />)
+    const socket = FakeWebSocket.instances[0]
     await act(async () => {
-      FakeWebSocket.instances[0].emit('close', { code: 1006 })
+      socket.emit('open', {})
+      socket.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'session.info', payload: { title: 'My chat', stored_session_id: 'real-1' } } }) })
+      socket.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'message.complete', payload: { text: 'The actual answer' } } }) })
     })
-    const reconnectButton = Array.from(container.querySelectorAll('button')).find(b =>
-      /reconnect side panel/i.test(b.textContent ?? '')
-    )
-    expect(reconnectButton).toBeDefined()
-    await act(async () => {
-      reconnectButton!.click()
-    })
+    expect(gatewayMocks.constructed).toBe(0)
+    expect(gatewayMocks.request).not.toHaveBeenCalled()
+    expect(socket.sent).toEqual([])
+    expect(onResponse).toHaveBeenCalledWith('The actual answer')
+    expect(onId).toHaveBeenCalledWith('real-1')
+    expect(onTitle).toHaveBeenCalledWith('My chat')
+  })
 
-    expect(gatewayMocks.close).toHaveBeenCalled()
-    expect(gatewayMocks.connect).toHaveBeenCalledTimes(2)
-    expect(gatewayMocks.constructed).toBe(1)
+  it('never opens a stale channel after unmount while minting its ticket', async () => {
+    let finish!: (url: string) => void
+    apiMocks.buildWsUrl.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const { ChatSidebar } = await import('./ChatSidebar')
+    await render(<ChatSidebar channel="chat-1" />)
+    await act(async () => root.unmount())
+    await act(async () => finish('ws://localhost/api/events?channel=stale'))
+    expect(FakeWebSocket.instances).toHaveLength(0)
   })
 
   it('clears the reconnect timer and closes the socket on unmount', async () => {

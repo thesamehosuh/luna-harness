@@ -18,11 +18,13 @@ export function ModelReloadConfirm({
   model,
   description,
   onCancel,
+  onConfirm,
 }: {
   model: string | null;
   /** Override the default body copy (e.g. the Models-page phrasing). */
   description?: string;
   onCancel: () => void;
+  onConfirm?: () => void;
 }) {
   return (
     <ConfirmDialog
@@ -30,10 +32,10 @@ export function ModelReloadConfirm({
       title="Switch model?"
       description={
         description ??
-        `Switching to ${model ?? ""} starts a fresh chat. Your current chat stays in your Sessions list and the agent's memory is kept. Reload now to apply it?`
+        `Start a new chat with ${model ?? ""}? Your current conversation stays in your history.`
       }
-      confirmLabel="Reload"
-      onConfirm={() => window.location.reload()}
+      confirmLabel={onConfirm ? "Start new chat" : "Reload"}
+      onConfirm={onConfirm ?? (() => window.location.reload())}
       onCancel={onCancel}
     />
   );

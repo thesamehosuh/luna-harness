@@ -1,6 +1,8 @@
 //! Native lifecycle controls. Dashboard pages never receive these permissions.
 use super::*;
-use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem};
+#[cfg(target_os = "macos")]
+use tauri::menu::Submenu;
 use tauri_plugin_dialog::DialogExt;
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -200,6 +202,7 @@ fn tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Menu::with_items(app, &owned.iter().map(|item| item as &dyn IsMenuItem<_>).collect::<Vec<_>>())
 }
 
+#[cfg(target_os = "macos")]
 pub(super) fn menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let owned = items(app)?;
     let luna = Submenu::with_items(app, "Luna", true, &owned.iter().map(|item| item as &dyn IsMenuItem<_>).collect::<Vec<_>>())?;
@@ -212,6 +215,7 @@ pub(super) fn menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 }
 
 pub(super) fn refresh_menus(app: &tauri::AppHandle) -> Result<()> {
+    #[cfg(target_os = "macos")]
     app.set_menu(menu(app)?)?;
     if let Some(tray) = app.tray_by_id("luna") { tray.set_menu(Some(tray_menu(app)?))?; }
     Ok(())

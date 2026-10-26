@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { CheckCircle2, Circle, Play, RefreshCw } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { ArrowRight, Brain, Check, KeyRound, LogIn, MessageCircle, Moon, RefreshCw, UserRound, Zap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
-import { H2 } from "@/components/ui/h2";
 import { Card, CardContent } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Select";
 import { useToast } from "@nous-research/ui/hooks/use-toast";
 import { Toast } from "@nous-research/ui/ui/components/toast";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { errorMessage } from "@/lib/api-error";
-import { lunaHomePath } from "@/lib/luna-paths";
 import { api, getManagementProfile } from "@/lib/api";
 import OpenCodeSetup from "@/components/OpenCodeSetup";
 import { LunaMark } from "@/components/LunaMark";
@@ -35,13 +33,13 @@ const PROVIDER_PRESETS: Array<{ label: string; provider: string; baseUrl: string
   { label: "Custom endpoint", provider: "", baseUrl: "", keyEnv: "" },
 ];
 
-function StepIcon({ status }: { status: string }) {
-  return status === "done" ? (
-    <CheckCircle2 className="h-5 w-5 text-success" />
-  ) : (
-    <Circle className="h-5 w-5 text-muted-foreground" />
-  );
-}
+const STEP_UI: Record<string, { label: string; title: string; icon: typeof Brain }> = {
+  provider: { label: "Model", title: "Choose a model", icon: Zap },
+  telegram: { label: "Telegram", title: "Connect Telegram", icon: MessageCircle },
+  honcho: { label: "Memory", title: "Add memory", icon: Brain },
+  character: { label: "Character", title: "Choose a character", icon: UserRound },
+  wake_test: { label: "Wakes", title: "Try self-wakes", icon: Moon },
+};
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -52,7 +50,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputClass = "rounded border bg-transparent px-2 py-1 text-sm";
+const inputClass = "rounded-control border border-input bg-transparent px-3 py-2 text-sm transition-colors hover:border-primary/50 focus-visible:outline-2 focus-visible:outline-primary";
 
 export default function OnboardingPage() {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -61,6 +59,7 @@ export default function OnboardingPage() {
   const [modelRevision, setModelRevision] = useState(0);
   const [steps, setSteps] = useState<StepReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [personas, setPersonas] = useState<PersonaPreset[]>([]);
   const [wakeReport, setWakeReport] = useState<WakeTestResult | null>(null);
@@ -78,8 +77,14 @@ export default function OnboardingPage() {
   const load = useCallback(async () => {
     try {
       const report = await onboardingApi.get();
+      setLoadError("");
       setSteps(report.steps);
       setActiveStep(previous => previous || firstIncomplete(report.steps) || report.steps[0]?.id || null);
+      const messaging = report.steps.find(step => step.id === "telegram");
+      if (messaging) setTelegram(previous => ({ ...previous,
+        chatId: previous.chatId || String((messaging.groups as string[] | undefined)?.[0] || ""),
+        adminId: previous.adminId || String((messaging.admin_ids as string[] | undefined)?.[0] || ""),
+      }));
       const saved = report.steps.find(step => step.id === "provider");
       if (saved?.configured === true) {
         const preset = PROVIDER_PRESETS.find(item => item.provider === saved.provider)
@@ -87,6 +92,7 @@ export default function OnboardingPage() {
         setProvider({ ...preset, model: String(saved.model || ""), baseUrl: String(saved.base_url || preset.baseUrl), keyEnv: String(saved.key_env || preset.keyEnv) });
       }
     } catch (e) {
+      setLoadError(errorMessage(e));
       showToast(`Could not load setup status: ${errorMessage(e)}`, "error");
     } finally {
       setLoading(false);
@@ -96,6 +102,12 @@ export default function OnboardingPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const followHash = () => setActiveStep(window.location.hash.replace("#step-", "") || null);
+    window.addEventListener("hashchange", followHash);
+    return () => window.removeEventListener("hashchange", followHash);
+  }, []);
 
   useEffect(() => {
     if (busy !== "honcho") return;
@@ -110,7 +122,10 @@ export default function OnboardingPage() {
   useEffect(() => {
     onboardingApi
       .personas()
-      .then((res) => setPersonas(res.personas))
+      .then((res) => {
+        setPersonas(res.personas);
+        setPersonaId(res.personas.find(persona => persona.is_current)?.id || "generic");
+      })
       .catch(() => undefined);
   }, []);
 
@@ -168,10 +183,15 @@ export default function OnboardingPage() {
       }
       const chat = telegram.chatId.trim();
       const admin = telegram.adminId.trim();
+      const existing = steps.find(step => step.id === "telegram");
+      const ids = (key: string) => Array.isArray(existing?.[key]) ? (existing[key] as unknown[]).map(String) : [];
+      const union = (...values: string[]) => [...new Set(values.filter(value => value && value !== "0"))];
+      // Default admin must also pass the transport's DM allowlist.
+      await api.setEnvVar("TELEGRAM_ALLOWED_USERS", union(...ids("allowed_user_ids"), admin).join(","));
       await api.saveConfig({
         telegram: {
-          ...(chat ? { group_allowed_chats: [chat] } : {}),
-          ...(admin ? { allow_admin_from: [admin], group_allow_admin_from: [admin] } : {}),
+          ...(chat ? { group_allowed_chats: union(...ids("groups"), chat) } : {}),
+          ...(admin ? { allow_admin_from: union(...ids("admin_ids"), admin), group_allow_admin_from: union(...ids("group_admin_ids"), admin) } : {}),
         },
         ...(chat
           ? { luna: { room: { chat_id: chat } } }
@@ -244,6 +264,13 @@ export default function OnboardingPage() {
     );
   }
 
+  if (loadError && steps.length === 0) return <div className="mx-auto max-w-3xl space-y-4 py-10">
+    <LunaMark className="h-10 w-10" />
+    <h1 className="luna-page-title text-3xl">Setup couldn’t load</h1>
+    <p role="alert" className="text-sm text-destructive">{loadError}</p>
+    <Button onClick={load}>Try again</Button>
+  </div>;
+
   const next = firstIncomplete(steps);
   const percent = completionPercent(steps);
   const currentId = steps.some(step => step.id === activeStep) ? activeStep : next || steps[0]?.id;
@@ -255,298 +282,147 @@ export default function OnboardingPage() {
     window.history.replaceState(null, "", `#step-${id}`);
   };
 
+  const optional = currentId === "honcho" || currentId === "wake_test" || currentId === "telegram";
+  const connection = provider.provider === "opencode-engine" ? "free" : provider.provider === "subscription" ? "account" : "key";
+  const skipped = current?.status === "skipped";
+
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 py-4 sm:py-10">
-      <div className="flex items-center justify-between gap-3">
-        <LunaMark className="h-12 w-12" />
-        <div className="flex items-center gap-3">
-          <Button ghost size="sm" onClick={load} disabled={busy !== null}><RefreshCw className="mr-1 h-3.5 w-3.5" />Check setup</Button>
-          <Link to="/chat" className="text-sm underline">Leave setup</Link>
+    <div className="onboarding mx-auto w-full max-w-3xl py-4 sm:py-8">
+      <div className="mb-8 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5"><LunaMark className="h-9 w-9" /><span className="text-sm text-muted-foreground">Luna · Setup</span></div>
+        <div className="flex items-center gap-2">
+          <Button ghost size="icon" onClick={load} disabled={busy !== null} aria-label="Check setup"><RefreshCw className="h-4 w-4" /></Button>
+          <Link to="/chat" className="onboarding-quiet-link">Leave setup</Link>
         </div>
       </div>
-      <h1 ref={heading} tabIndex={-1} className="luna-page-title text-3xl outline-none sm:text-4xl">
-        {steps.find(step => step.id === currentId)?.title || "Set up Luna"}
-      </h1>
-      <p className="text-sm text-muted-foreground">Make this space yours, one step at a time. Messaging, memory and self-wakes are optional. Your saved choices stay here when you return.</p>
-      {steps.some(step => step.id === "provider" && (step.status === "done" || step.configured === true)) && (
-        <Link to="/chat" className="inline-flex rounded border px-4 py-2 text-sm">Start chatting</Link>
-      )}
-
-      <nav aria-label="Setup steps" className="flex flex-wrap gap-2">
-        {steps.map((step, index) => <Button key={step.id} outlined={step.id !== currentId} size="sm"
+      <nav aria-label="Setup steps" className="onboarding-steps">
+        {steps.map((step, index) => <button key={step.id} type="button"
+          aria-label={`${index + 1}. ${STEP_UI[step.id]?.label || step.title}`}
           aria-current={step.id === currentId ? "step" : undefined} disabled={busy !== null}
-          onClick={() => goTo(step.id)}>{index + 1}. {step.title}</Button>)}
+          onClick={() => goTo(step.id)}>
+          <span className="onboarding-step-number">{step.status === "done" ? <Check className="h-4 w-4" /> : index + 1}</span>
+          <span>{STEP_UI[step.id]?.label || step.title}</span>
+        </button>)}
       </nav>
-      <div className="space-y-2">
-        <div className="h-1 overflow-hidden rounded bg-muted" role="progressbar" aria-label="Setup completion" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-          <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
-        </div>
-        <p className="text-xs text-muted-foreground" role="status">Step {currentIndex + 1} of {steps.length} · {percent}% saved</p>
+      <div className="sr-only" role="progressbar" aria-label="Setup completion" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} />
+      <div className="mb-5 mt-9 flex items-center justify-between gap-3">
+        <h1 ref={heading} tabIndex={-1} className="luna-page-title text-3xl outline-none sm:text-4xl">{STEP_UI[currentId || ""]?.title || current?.title || "Set up Luna"}</h1>
+        {optional && <span className="text-xs text-muted-foreground">Optional</span>}
+        {current?.status === "done" && <span className="flex items-center gap-1.5 text-xs text-success"><Check className="h-4 w-4" />Ready</span>}
       </div>
-      {steps.filter(step => step.id === currentId).map((step) => (
-        <Card key={step.id} id={`step-${step.id}`}>
-          <CardContent className="p-5 sm:p-7">
-            <div className="flex flex-wrap items-center gap-2">
-              <StepIcon status={step.status} />
-              <H2 className="text-base">{step.title}</H2>
-              <Badge tone={step.status === "done" ? "default" : "secondary"}>{step.status === "done" ? "Ready" : step.status === "skipped" ? "Skipped" : "Not set up"}</Badge>
-              <span className="min-w-0 basis-full break-words text-xs text-muted-foreground sm:ml-auto sm:basis-auto">{step.detail}</span>
+      {current && <Card id={`step-${current.id}`}>
+        <CardContent className="p-5 sm:p-7">
+          {skipped ? <div className="flex items-center justify-between gap-3 py-5">
+            <span className="text-sm text-muted-foreground">Skipped for now</span>
+            <Button outlined size="sm" disabled={busy !== null} onClick={() => chooseOptional(current.id as "honcho" | "wake_test" | "telegram", "enabled")}>Set up now</Button>
+          </div> : <>
+          {current.id === "provider" && <div className="space-y-6">
+            <div className="onboarding-connections" role="group" aria-label="Model connection">
+              {([
+                ["free", "Free models", Zap],
+                ["account", "Sign in", LogIn],
+                ["key", "API key", KeyRound],
+              ] as const).map(([id, label, Icon]) => <button key={id} type="button" aria-label={label} aria-pressed={connection === id}
+                onClick={() => setProvider({ ...PROVIDER_PRESETS[id === "free" ? 0 : id === "account" ? 1 : 3], model: provider.model })}>
+                <Icon className="h-5 w-5" /><span className="font-medium">{label}</span>
+              </button>)}
             </div>
-
-            {(step.id === "honcho" || step.id === "wake_test" || step.id === "telegram") && (
-              <div className="pt-2">
-                <Button outlined size="sm" disabled={busy !== null} onClick={() => chooseOptional(
-                  step.id as "honcho" | "wake_test" | "telegram", step.status === "skipped" ? "enabled" : "skipped",
-                )}>{step.status === "skipped" ? "Set up now" : "Skip for now"}</Button>
-              </div>
-            )}
-
-            {step.id === "provider" && (
-              <div className="grid max-w-2xl grid-cols-1 gap-3 pt-3 sm:grid-cols-2">
-                <Field label="provider">
-                  <select
-                    className={inputClass}
-                    value={provider.label}
-                    onChange={(e) => {
-                      const preset = PROVIDER_PRESETS.find((p) => p.label === e.target.value) ?? PROVIDER_PRESETS[0];
-                      setProvider({ ...preset, model: provider.model });
-                    }}
-                  >
-                    {PROVIDER_PRESETS.map((p) => (
-                      <option key={p.label}>{p.label}</option>
-                    ))}
-                  </select>
-                </Field>
-                {provider.provider === "opencode-engine" ? (
-                  <div className="min-w-0 sm:col-span-2"><OpenCodeSetup onSaved={refresh} /></div>
-                ) : provider.provider === "subscription" ? (
-                  <div className="space-y-3 sm:col-span-2">
-                    <p className="text-sm text-muted-foreground">Sign in with your ChatGPT account using OpenAI Codex, or another supported account. Then choose a model. No separate API key is needed for subscription login.</p>
-                    <OAuthProvidersCard guided onError={message => showToast(message, "error")} onSuccess={() => {
-                      setModelRevision(value => value + 1);
-                      void refresh();
-                    }} />
-                    <Button onClick={() => setModelPicker(true)}>Choose companion model</Button>
+            {connection === "free" ? <OpenCodeSetup onSaved={refresh} compact />
+              : connection === "account" ? <div className="space-y-5">
+                <OAuthProvidersCard guided compact onError={message => showToast(message, "error")} onSuccess={() => {
+                  setModelRevision(value => value + 1); void refresh();
+                }} />
+                <Button onClick={() => setModelPicker(true)}>Choose companion model<ArrowRight className="ml-2 h-4 w-4" /></Button>
+              </div> : <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Provider</span>
+                  <Select label="Provider" value={provider.label} options={PROVIDER_PRESETS.slice(2).map(preset => ({ value: preset.label, label: preset.label }))}
+                    onValueChange={value => { const preset = PROVIDER_PRESETS.find(item => item.label === value)!; setProvider({ ...preset, model: provider.model }); }} />
+                </div>
+                <Field label="Model"><input className={inputClass} placeholder="Model ID" value={provider.model} onChange={event => setProvider({ ...provider, model: event.target.value })} /></Field>
+                <Field label="API key"><input className={inputClass} type="password" autoComplete="off" value={apiKey} onChange={event => setApiKey(event.target.value)} /></Field>
+                {!provider.provider && <Field label="Endpoint URL"><input className={inputClass} placeholder="https://…/v1" value={provider.baseUrl} onChange={event => setProvider({ ...provider, baseUrl: event.target.value })} /></Field>}
+                <details className="sm:col-span-2">
+                  <summary className="onboarding-disclosure">Connection options</summary>
+                  <div className="grid gap-3 pt-3 sm:grid-cols-2">
+                    {provider.provider && <Field label="Endpoint URL"><input className={inputClass} value={provider.baseUrl} onChange={event => setProvider({ ...provider, baseUrl: event.target.value })} /></Field>}
+                    <Field label="Key variable"><input className={inputClass} value={provider.keyEnv} onChange={event => setProvider({ ...provider, keyEnv: event.target.value })} /></Field>
                   </div>
-                ) : (<>
-                <Field label="model">
-                  <input
-                    className={inputClass}
-                    placeholder="e.g. gpt-5-mini"
-                    value={provider.model}
-                    onChange={(e) => setProvider({ ...provider, model: e.target.value })}
-                  />
-                </Field>
-                <Field label="base url">
-                  <input
-                    className={inputClass}
-                    value={provider.baseUrl}
-                    onChange={(e) => setProvider({ ...provider, baseUrl: e.target.value })}
-                  />
-                </Field>
-                <Field label={`API key env name (${provider.keyEnv || "custom"})`}>
-                  <input
-                    className={inputClass}
-                    value={provider.keyEnv}
-                    onChange={(e) => setProvider({ ...provider, keyEnv: e.target.value })}
-                  />
-                </Field>
-                <Field label={`API key (stored in ${lunaHomePath(".env")})`}>
-                  <input
-                    className={inputClass}
-                    type="password"
-                    placeholder="sk-…"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                  />
-                </Field>
-                <div className="flex items-end">
-                  <Button size="sm" onClick={saveProvider} disabled={busy === "provider" || !provider.model.trim() || !provider.baseUrl.trim()}>
-                    Save provider
-                  </Button>
-                </div>
-                </>)}
-              </div>
-            )}
-
-            {step.id === "telegram" && step.status !== "skipped" && (
-              <div className="grid max-w-2xl grid-cols-1 gap-3 pt-3 sm:grid-cols-2">
-                <p className="text-xs text-muted-foreground sm:col-span-2">
-                  Create a bot with @BotFather, paste the token below, then add the bot to your group
-                  and send a message. Use Channels to pair, or enter the group chat id and
-                  your own user id as the admin.
-                </p>
-                <Link to="/channels" className="text-sm underline sm:col-span-2">Open guided channel setup and pairing</Link>
-                <Field label="bot token">
-                  <input
-                    className={inputClass}
-                    type="password"
-                    placeholder="123456:ABC…"
-                    value={telegram.token}
-                    onChange={(e) => setTelegram({ ...telegram, token: e.target.value })}
-                  />
-                </Field>
-                <Field label="group chat id">
-                  <input
-                    className={inputClass}
-                    placeholder="-100…"
-                    value={telegram.chatId}
-                    onChange={(e) => setTelegram({ ...telegram, chatId: e.target.value })}
-                  />
-                </Field>
-                <Field label="your user id (admin)">
-                  <input
-                    className={inputClass}
-                    placeholder="1000…"
-                    value={telegram.adminId}
-                    onChange={(e) => setTelegram({ ...telegram, adminId: e.target.value })}
-                  />
-                </Field>
-                <div className="flex items-end">
-                  <Button size="sm" onClick={saveTelegram} disabled={busy === "telegram"}>
-                    Save Telegram
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {step.id === "honcho" && step.status !== "skipped" && (
-              <div className="max-w-2xl space-y-3 pt-3">
-                <p className="text-xs text-muted-foreground">
-                  Give your companion long-term memory of people and conversations. Setup prepares Docker,
-                  Honcho and the bundled multilingual embedding model. No embedding API key is needed.
-                </p>
-                <MemoryReasoningSelector key={modelRevision} />
-                <Link to="/memory" className="block text-xs underline">Dialectic turns, recall budget and full Honcho status</Link>
-                <Button size="sm" onClick={startHoncho} disabled={busy === "honcho"}>
-                  {busy === "honcho" ? <Spinner className="mr-1 h-3.5 w-3.5" /> : null}
-                  {busy === "honcho" ? "Setting up memory…" : "Set up memory"}
-                </Button>
-                {busy === "honcho" && <p role="status" className="text-sm">{memoryProgress || "Preparing memory…"}</p>}
-                <p className="text-xs text-muted-foreground">
-                  First setup downloads the memory containers. Your operating system may ask permission to install Docker.
-                  Existing memory data and unrelated containers are kept.
-                </p>
-              </div>
-            )}
-
-            {step.id === "character" && (
-              <div className="space-y-2 pt-3">
-                {personas.map((p) => (
-                  <label key={p.id} className="flex items-start gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="persona"
-                      checked={personaId === p.id}
-                      onChange={() => setPersonaId(p.id)}
-                    />
-                    <span>
-                      <span className="font-medium">{p.name}</span>
-                      <span className="block text-xs text-muted-foreground">{p.description}</span>
-                    </span>
-                  </label>
-                ))}
-                <Button size="sm" onClick={applyPersona} disabled={busy === "character" || !personas.length}>
-                  Apply persona
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  This writes SOUL.md. The Character page has the full editor for voice, emoji policy,
-                  and wake behaviour.
-                </p>
-              </div>
-            )}
-
-            {step.id === "wake_test" && step.status !== "skipped" && (
-              <div className="space-y-2 pt-3">
-                <p className="max-w-2xl text-xs text-muted-foreground">
-                  Self-wakes use Jev separately from the chat model. The default route uses OpenCode
-                  Zen; add its key here if you did not use it for chat. You can choose another route in Behaviour.
-                  The dry-run checks wiring; the live test verifies a real verdict before setup is complete.
-                </p>
-                <Field label="OpenCode Zen wake key (optional if already saved)">
-                  <input className={inputClass} type="password" value={wakeKey}
-                    onChange={(event) => setWakeKey(event.target.value)} />
-                </Field>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" onClick={() => runWakeTest(false)} disabled={busy === "wake_test"}>
-                    <Play className="mr-1 h-3.5 w-3.5" /> Run dry-run test
-                  </Button>
-                  <Button outlined
-                    size="sm"
-                    onClick={() => runWakeTest(true)}
-                    disabled={busy === "wake_test"}
-                  >
-                    Run live (spends one jev call)
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    A synthetic group message goes through the wake pipeline. Nothing is ever sent to
-                    the room.
-                  </span>
-                </div>
-                {wakeReport && (
-                  <div className="rounded border p-2 text-xs">
-                    <div>
-                      <Badge tone={wakeReport.ok ? "default" : "destructive"}>
-                        {wakeReport.ok ? "ok" : "failed"}
-                      </Badge>{" "}
-                      {wakeReport.detail}
-                    </div>
-                    {wakeReport.decision && (
-                      <div className="mt-1 font-mono">
-                        action={wakeReport.decision.action} value={wakeReport.decision.value}{" "}
-                        route={wakeReport.decision.jev_route} reason={wakeReport.decision.reason}
-                      </div>
-                    )}
-                    {!!wakeReport.route_chain?.length && (
-                      <div className="mt-1 text-muted-foreground">
-                        routes:{" "}
-                        {wakeReport.route_chain
-                          .map((r) => `${r.model || "?"}${r.key_set ? "" : " (no key)"}`)
-                          .join(" → ")}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
-
-      <div className="flex items-center justify-between gap-3">
-        <Button outlined disabled={busy !== null || currentIndex <= 0} onClick={() => goTo(steps[currentIndex - 1].id)}>Back</Button>
-        {currentIndex < steps.length - 1 ? <Button disabled={busy !== null || !canContinue} onClick={() => goTo(steps[currentIndex + 1].id)}>Next</Button>
-          : <Link to="/chat" className="rounded border px-4 py-2 text-sm">Open Chat</Link>}
+                </details>
+                <div className="sm:col-span-2"><Button onClick={saveProvider} disabled={busy !== null || !provider.model.trim() || !provider.baseUrl.trim()}>Save connection</Button></div>
+              </div>}
+          </div>}
+          {current.id === "telegram" && <div className="space-y-5">
+            <div className="flex items-center justify-between gap-3"><label htmlFor="telegram-setup-token" className="text-sm font-medium">Bot token</label><a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="onboarding-quiet-link">Create a bot ↗</a></div>
+            <div className="onboarding-token-row"><MessageCircle className="h-5 w-5 text-primary" aria-hidden="true" /><input id="telegram-setup-token" aria-label="Bot token" className={inputClass} type="password" autoComplete="off" placeholder="123456:ABC…" value={telegram.token} onChange={event => setTelegram({ ...telegram, token: event.target.value })} /></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Your Telegram user ID · default admin"><input className={inputClass} inputMode="numeric" placeholder="123456789" value={telegram.adminId} onChange={event => setTelegram({ ...telegram, adminId: event.target.value })} /></Field>
+              <Field label="Group chat ID"><input className={inputClass} inputMode="text" placeholder="-100…" value={telegram.chatId} onChange={event => setTelegram({ ...telegram, chatId: event.target.value })} /></Field>
+            </div>
+            <div className="onboarding-card-actions"><Link to="/channels" className="onboarding-quiet-link">Pair a chat<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={saveTelegram} disabled={busy !== null || !/^[1-9]\d*$/.test(telegram.adminId.trim()) || !/^-[1-9]\d*$/.test(telegram.chatId.trim()) || (!telegram.token.trim() && current.token_present !== true)}>Save Telegram</Button></div>
+          </div>}
+          {current.id === "honcho" && <div className="space-y-5">
+            <MemoryReasoningSelector key={modelRevision} compact />
+            <div className="onboarding-card-actions">
+              <Link to="/memory" className="onboarding-quiet-link">Memory settings</Link>
+              <Button onClick={startHoncho} disabled={busy !== null}>{busy === "honcho" && <Spinner className="mr-2 h-4 w-4" />}{busy === "honcho" ? "Setting up memory…" : "Set up memory"}</Button>
+            </div>
+            {busy === "honcho" ? <p role="status" className="text-sm">{memoryProgress || "Preparing memory…"}</p> : null}
+          </div>}
+          {current.id === "character" && <div className="space-y-5">
+            <div className="onboarding-personas" role="radiogroup" aria-label="Character preset">
+              {personas.map(persona => <label key={persona.id} data-selected={personaId === persona.id}>
+                <input className="sr-only" type="radio" name="persona" checked={personaId === persona.id} onChange={() => setPersonaId(persona.id)} />
+                <span className="font-medium">{persona.name}</span>
+                {persona.sample && <span className="onboarding-persona-sample">“{persona.sample}”</span>}
+                {personaId === persona.id && <Check className="onboarding-persona-check h-4 w-4" />}
+              </label>)}
+            </div>
+            {personas.find(persona => persona.id === personaId) && <details><summary className="onboarding-disclosure">View persona</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-sm text-muted-foreground">{personas.find(persona => persona.id === personaId)?.content}</pre></details>}
+            <div className="onboarding-card-actions"><Link to="/character" className="onboarding-quiet-link">Write your own<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={applyPersona} disabled={busy !== null || !personas.length}>Apply persona</Button></div>
+          </div>}
+          {current.id === "wake_test" && <div className="space-y-5">
+            <Field label="OpenCode Zen key"><input className={inputClass} type="password" autoComplete="off" placeholder="Optional if already connected" value={wakeKey} onChange={event => setWakeKey(event.target.value)} /></Field>
+            <div className="onboarding-card-actions">
+              <span className="text-xs text-muted-foreground">One model call · Nothing sent to your chats</span>
+              <Button onClick={() => runWakeTest(true)} disabled={busy !== null}>{busy === "wake_test" ? "Testing…" : "Test connection"}</Button>
+            </div>
+            {wakeReport && <p role="status" className={`text-sm ${wakeReport.ok ? "text-success" : "text-destructive"}`}>{wakeReport.detail}</p>}
+            <details><summary className="onboarding-disclosure">Test options</summary><div className="space-y-3 pt-3">
+              <Button outlined size="sm" onClick={() => runWakeTest(false)} disabled={busy !== null}>Run dry-run test</Button>
+              {wakeReport?.decision && <p className="font-mono text-xs">{wakeReport.decision.action} · {wakeReport.decision.reason}</p>}
+              <p className="text-xs text-muted-foreground">Self-wakes remain off until you enable them.</p>
+              <Link to="/behaviour" className="onboarding-quiet-link">Wake settings<ArrowRight className="h-3.5 w-3.5" /></Link>
+            </div></details>
+          </div>}
+          </>}
+        </CardContent>
+      </Card>}
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <Button ghost disabled={busy !== null || currentIndex <= 0} onClick={() => goTo(steps[currentIndex - 1].id)}>Back</Button>
+        <div className="flex items-center gap-3">
+          {optional && !skipped && <Button ghost disabled={busy !== null} onClick={() => chooseOptional(currentId as "honcho" | "wake_test" | "telegram", "skipped")}>Skip for now</Button>}
+          {currentIndex < steps.length - 1 ? <Button disabled={busy !== null || !canContinue} onClick={() => goTo(steps[currentIndex + 1].id)}>Next<ArrowRight className="ml-2 h-4 w-4" /></Button>
+            : <Link to="/chat" className="onboarding-finish">Open Chat<ArrowRight className="h-4 w-4" /></Link>}
+        </div>
       </div>
-      <details className="rounded border p-4">
-        <summary className="cursor-pointer text-sm font-medium">More setup options</summary>
-        <div className="grid gap-3 pt-3 text-sm sm:grid-cols-2">
-          <Link to="/config" className="underline">Terminal backend, agent limits and context compression</Link>
-          <Link to="/skills" className="underline">Tools, permissions and skills</Link>
-          <Link to="/channels" className="underline">Messaging platforms and pairing</Link>
-          <Link to="/character" className="underline">Character, voice and persona editor</Link>
-          <Link to="/models" className="underline">Models and auxiliary model assignments</Link>
-          <Link to="/env" className="underline">API keys and account connections</Link>
+      <details className="mt-5 px-1 py-3">
+        <summary className="onboarding-disclosure">More setup options</summary>
+        <div className="grid gap-3 pt-4 text-sm sm:grid-cols-2">
+          <Link to="/controls" className="onboarding-quiet-link">Models & accounts</Link>
+          <Link to="/controls#keys" className="onboarding-quiet-link">API keys</Link>
+          <Link to="/channels" className="onboarding-quiet-link">Messaging</Link>
+          <Link to="/character" className="onboarding-quiet-link">Character editor</Link>
+          <Link to="/skills" className="onboarding-quiet-link">Tools & permissions</Link>
+          <Link to="/config" className="onboarding-quiet-link">Advanced settings</Link>
+          {current?.detail && <p className="text-xs text-muted-foreground sm:col-span-2" role="status">{current.detail}</p>}
         </div>
       </details>
       {modelPicker && <ModelPickerDialog loader={api.getModelOptions} alwaysGlobal title="Choose companion model"
         onClose={() => setModelPicker(false)} onApply={async ({ provider, model, confirmExpensiveModel }) => {
           const result = await api.setModelAssignment({ scope: "main", provider, model, confirm_expensive_model: confirmExpensiveModel });
           if (result.confirm_required) return result;
-          setModelRevision(value => value + 1);
-          await refresh();
-          setModelPicker(false);
-          return result;
+          setModelRevision(value => value + 1); await refresh(); setModelPicker(false); return result;
         }} />}
-      {percent === 100 && (
-        <Card>
-          <CardContent className="py-3 text-sm">
-            Setup choices saved. Open Chat to talk to your companion. You can change any optional
-            feature here later; self-wakes stay off until you enable them in Behaviour.
-          </CardContent>
-        </Card>
-      )}
-
       <Toast toast={toast} />
     </div>
   );

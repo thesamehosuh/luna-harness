@@ -11,6 +11,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Contract checks must import this checkout’s overlay, even when the chosen
+# engine interpreter has a different editable Luna deployment installed.
+export PYTHONPATH="$REPO_ROOT/luna/lib:$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+
 PY="${PYTHON:-python3}"
 
 # Prefer the project venv over the system interpreter — see the note in scripts/test.sh. The declared

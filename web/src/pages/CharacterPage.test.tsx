@@ -220,13 +220,14 @@ function matchingBundle() {
   };
 }
 
-async function renderCharacterPage() {
+async function renderCharacterPage(appearance = false) {
   const [{ default: CharacterPage }, { I18nProvider }, { PageHeaderProvider }, { UnsavedChangesProvider }] = await Promise.all([
     import("./CharacterPage"),
     import("@/i18n"),
     import("@/contexts/PageHeaderProvider"),
     import("@/contexts/UnsavedChanges"),
   ]);
+  const { default: AppearanceSettings } = await import("@/components/AppearanceSettings");
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -236,14 +237,14 @@ async function renderCharacterPage() {
         <MemoryRouter>
           <PageHeaderProvider pluginTabs={[]}>
             <UnsavedChangesProvider>
-            <CharacterPage />
+            {appearance ? <AppearanceSettings /> : <CharacterPage />}
             </UnsavedChangesProvider>
           </PageHeaderProvider>
         </MemoryRouter>
       </I18nProvider>,
     ),
   );
-  await waitFor(() => buttonWith(container, "Apply preset") !== undefined);
+  await waitFor(() => buttonWith(container, appearance ? "luna" : "Apply preset") !== undefined);
 }
 
 const buttonWith = (c: HTMLElement, text: string) =>
@@ -399,14 +400,13 @@ describe("Character card draft isolation", () => {
     });
   });
 
-  it.each(["hard limits", "skin", "skill"])("preserves the persona when saving %s", async (action) => {
+  it.each(["hard limits", "skill"])("preserves the persona when saving %s", async (action) => {
     await renderCharacterPage();
     await act(async () => fireEvent.change(introInput(), { target: { value: "my persona draft" } }));
     if (action === "hard limits") {
       await act(async () => fireEvent.change(maxLinesInput(), { target: { value: "7" } }));
       await act(async () => buttonWith(container, "Save hard limits")!.click());
-    } else if (action === "skin") {
-      await act(async () => buttonWith(container, "mono")!.click());
+
     } else {
       const skill = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
         .find((el) => el.closest("label")?.textContent?.includes("luna-notes"))!;
@@ -417,16 +417,15 @@ describe("Character card draft isolation", () => {
     expect(unsavedRegistry.list().map((entry) => entry.id)).toContain("character-soul");
   });
 
-  it("guards limits and colors, and saves every dirty card without discarding another", async () => {
+  it("guards limits and persona, and saves every dirty card without discarding another", async () => {
     await renderCharacterPage();
     expect(unsavedRegistry.isDirty()).toBe(false);
     await act(async () => {
       fireEvent.change(introInput(), { target: { value: "my persona draft" } });
       fireEvent.change(maxLinesInput(), { target: { value: "7" } });
-      fireEvent.change(skinColorInput(), { target: { value: "#aabbcc" } });
     });
     expect(unsavedRegistry.list().map((entry) => entry.id)).toEqual([
-      "character-soul", "character-output", "character-colors",
+      "character-soul", "character-output",
     ]);
     const leave = vi.fn();
     await act(async () => { pendingNavigation.request(leave); });
@@ -437,7 +436,6 @@ describe("Character card draft isolation", () => {
       [{ title: "Luna", intro: "my persona draft", sections: [], footer: "" }],
       [{ output: { emoji_filter: true, strip_emoji: true, allowed_emoji: [], max_lines: 7, max_chars: 1200, language: "auto", style_filter: false, sentence_breaks: true } }],
     ]);
-    expect(lunaMocks.saveSkinColors).toHaveBeenCalledWith("luna", { banner_text: "#aabbcc" }, "Luna");
     expect(leave).toHaveBeenCalledOnce();
     expect(unsavedRegistry.isDirty()).toBe(false);
   });
@@ -467,8 +465,8 @@ describe("Character card draft isolation", () => {
     expect(unsavedRegistry.isDirty()).toBe(true);
   });
 
-  it("discards color edits before an accepted skin switch and keeps other drafts on Stay", async () => {
-    await renderCharacterPage();
+  it("keeps appearance edits on Stay and discards them before an accepted palette switch", async () => {
+    await renderCharacterPage(true);
     await act(async () => fireEvent.change(skinColorInput(), { target: { value: "#aabbcc" } }));
     await act(async () => buttonWith(container, "mono")!.click());
     expect(lunaMocks.saveCharacter).not.toHaveBeenCalled();

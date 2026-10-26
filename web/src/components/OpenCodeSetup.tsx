@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { errorMessage } from "@/lib/api-error";
 import { opencodeApi, type OpenCodeStatus, type FreeModel, type ModelProbe } from "@/lib/luna-opencode";
 
-export default function OpenCodeSetup({ onSaved }: { onSaved?: () => void | Promise<unknown> }) {
+export default function OpenCodeSetup({ onSaved, compact = false }: { onSaved?: () => void | Promise<unknown>; compact?: boolean }) {
   const [status, setStatus] = useState<OpenCodeStatus | null>(null);
   const [models, setModels] = useState<FreeModel[]>([]);
   const [model, setModel] = useState("");
@@ -45,11 +46,18 @@ export default function OpenCodeSetup({ onSaved }: { onSaved?: () => void | Prom
     finally { setBusy(null); }
   };
 
+  const saveSelected = () => act("save", async () => {
+    await opencodeApi.select(model);
+    setStatus(current => current ? { ...current, selected: model } : current);
+    setSaved(true);
+    // Bind verification to the saved connection, not a previous selection.
+    setProbe(await opencodeApi.probe(model));
+    await onSaved?.();
+  });
+
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Use OpenCode’s free models for your companion’s replies. No API key is needed. OpenCode sets availability and usage limits.
-      </p>
+      {!compact && <p className="text-sm text-muted-foreground">Free models through OpenCode. No API key needed.</p>}
       {!status?.installed && (
         <Button size="sm" disabled={busy !== null} onClick={() => act("install", async () => {
           setStatus(await opencodeApi.install());
@@ -60,30 +68,23 @@ export default function OpenCodeSetup({ onSaved }: { onSaved?: () => void | Prom
       )}
       {status?.installed && (
         <>
-          <label className="flex max-w-xl flex-col gap-1 text-sm">
-            <span>Free model</span>
-            <select aria-label="Free model" className="rounded border bg-transparent px-2 py-1" value={model}
+          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex min-w-0 flex-1 basis-52 flex-col gap-1 text-sm">
+            <label htmlFor="opencode-free-model">Free model</label>
+            <Select id="opencode-free-model" label="Free model" value={model}
               disabled={busy !== null || models.length === 0}
-              onChange={(event) => { setModel(event.target.value); setProbe(null); setSaved(false); }}>
-              {models.length === 0 && <option value="">{busy ? "Loading models…" : "No free models available"}</option>}
-              {models.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
-            </select>
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <Button outlined size="sm" disabled={busy !== null} onClick={() => act("refresh", loadModels)}>Refresh models</Button>
-            <Button outlined size="sm" disabled={busy !== null || !model} onClick={() => act("probe", async () => {
-              setProbe(await opencodeApi.probe(model));
-            })}>{busy === "probe" ? "Testing model…" : "Test model"}</Button>
-            <Button size="sm" disabled={busy !== null || !model} onClick={() => act("save", async () => {
-              await opencodeApi.select(model);
-              setStatus({ ...status, selected: model });
-              setSaved(true);
-              // Verify the saved connection, so a pre-selection probe cannot leave
-              // setup with a proof bound to the previous configuration.
-              setProbe(await opencodeApi.probe(model));
-              await onSaved?.();
-            })}>Use this model</Button>
+              placeholder={busy ? "Loading models…" : "No free models available"}
+              options={models.map(entry => ({ value: entry.id, label: entry.name }))}
+              onValueChange={value => { setModel(value); setProbe(null); setSaved(false); }} />
           </div>
+          <Button disabled={busy !== null || !model} onClick={saveSelected}>{busy === "save" ? "Testing…" : "Use this model"}</Button>
+          </div>
+          {!compact && <div className="flex flex-wrap gap-2">
+            {!compact && <Button outlined size="sm" disabled={busy !== null} onClick={() => act("refresh", loadModels)}>Refresh models</Button>}
+            {!compact && <Button outlined size="sm" disabled={busy !== null || !model} onClick={() => act("probe", async () => {
+              setProbe(await opencodeApi.probe(model));
+            })}>{busy === "probe" ? "Testing model…" : "Test model"}</Button>}
+          </div>}
           {saved && <p role="status" className="text-sm">Model saved. New conversations use {models.find((entry) => entry.id === model)?.name || model}.</p>}
           {probe && <p role="status" className={`text-sm ${probe.ok ? "text-success" : "text-muted-foreground"}`}>
             {probe.ok ? `Model replied: ${probe.detail}` : probe.detail}
@@ -91,7 +92,7 @@ export default function OpenCodeSetup({ onSaved }: { onSaved?: () => void | Prom
         </>
       )}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <p className="text-xs text-muted-foreground">Memory can share this model. Its embeddings run locally; wake checks are optional.</p>
+      <p className="text-xs text-muted-foreground">Availability and usage limits are set by OpenCode.</p>
     </div>
   );
 }

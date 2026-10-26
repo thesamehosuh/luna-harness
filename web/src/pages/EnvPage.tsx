@@ -48,8 +48,9 @@ import { lunaHomePath } from "@/lib/luna-paths";
 
 /** Map env-var key prefixes to a human-friendly provider name + ordering. */
 const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
-  // Nous Portal first
-  { prefix: "NOUS_", name: "Nous Portal", priority: 0 },
+  { prefix: "OPENAI_", name: "OpenAI", priority: 0 },
+  { prefix: "AZURE_", name: "Azure OpenAI", priority: 1 },
+  { prefix: "NOUS_", name: "Nous Portal", priority: 10 },
   // Then alphabetical by display name
   { prefix: "ANTHROPIC_", name: "Anthropic", priority: 1 },
   { prefix: "DASHSCOPE_", name: "DashScope (Qwen)", priority: 2 },
@@ -340,6 +341,7 @@ function EnvVarRow({
 
 function ProviderGroupCard({
   group,
+  forceExpanded = false,
   edits,
   setEdits,
   revealed,
@@ -351,6 +353,7 @@ function ProviderGroupCard({
   clearDialogOpen = false,
 }: {
   group: ProviderGroup;
+  forceExpanded?: boolean;
   edits: Record<string, string>;
   setEdits: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   revealed: Record<string, string>;
@@ -362,6 +365,7 @@ function ProviderGroupCard({
   clearDialogOpen?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const open = forceExpanded || expanded;
   const { t } = useI18n();
 
   // Separate API keys from base URLs and other settings
@@ -384,15 +388,15 @@ function ProviderGroupCard({
   const keyUrl = apiKeys.find(([, info]) => info.url)?.[1]?.url ?? null;
 
   return (
-    <div className="rounded-panel border border-border">
+    <div className="provider-row border-b border-border last:border-b-0">
       {/* Header — always visible */}
       <ListItem
         onClick={() => setExpanded(!expanded)}
-        aria-expanded={expanded}
-        className="justify-between gap-3 px-4 py-3 hover:bg-primary/5"
+        aria-expanded={open}
+        className="justify-between gap-3 rounded-none px-4 py-3 hover:bg-primary/5"
       >
         <div className="flex items-center gap-3 min-w-0">
-          {expanded ? (
+          {open ? (
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -426,7 +430,7 @@ function ProviderGroupCard({
         </div>
       </ListItem>
 
-      {expanded && (
+      {open && (
         <div className="border-t border-border px-4 py-3 grid gap-2">
           {apiKeys.map(([key, info]) => (
             <EnvVarRow
@@ -609,22 +613,27 @@ function CustomKeysCard({
 /*  Main page                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function EnvPage() {
+export default function EnvPage({ embedded = false }: { embedded?: boolean }) {
   const [vars, setVars] = useState<Record<string, EnvVarInfo> | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(true); // Show all providers by default
+  const [query, setQuery] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [reload, setReload] = useState(0);
   const { toast, showToast } = useToast();
   const { t } = useI18n();
   const { setAfterTitle } = usePageHeader();
 
   useEffect(() => {
+    let cancelled = false;
     api
       .getEnvVars()
-      .then(setVars)
-      .catch(() => {});
-  }, []);
+      .then(value => { if (!cancelled) { setVars(value); setLoadError(""); } })
+      .catch(reason => { if (!cancelled) setLoadError(errorMessage(reason)); });
+    return () => { cancelled = true; };
+  }, [reload]);
 
   // Scroll-to sub-nav in the page header
   const sections = useMemo(() => {
@@ -654,6 +663,7 @@ export default function EnvPage() {
   }, [vars, t]);
 
   useLayoutEffect(() => {
+    if (embedded) return;
     if (!vars) {
       setAfterTitle(null);
       return;
@@ -681,7 +691,7 @@ export default function EnvPage() {
     return () => {
       setAfterTitle(null);
     };
-  }, [vars, sections, setAfterTitle]);
+  }, [vars, sections, setAfterTitle, embedded]);
 
   const handleSave = async (key: string) => {
     const value = edits[key];
@@ -808,9 +818,12 @@ export default function EnvPage() {
         customEntries: [] as [string, EnvVarInfo][],
       };
 
+    const matchesQuery = (key: string, info: EnvVarInfo) => !query.trim() ||
+      `${key} ${info.description} ${getProviderGroup(key)}`.toLowerCase().includes(query.trim().toLowerCase());
+    const visible = (key: string, info: EnvVarInfo) => (showAdvanced || !info.advanced || info.is_set || !!query.trim()) && matchesQuery(key, info);
     const providerEntries = Object.entries(vars).filter(
-      ([, info]) =>
-        info.category === "provider" && (showAdvanced || !info.advanced),
+      ([key, info]) =>
+        info.category === "provider" && visible(key, info),
     );
 
     // Group by provider
@@ -847,10 +860,10 @@ export default function EnvPage() {
     const otherCategories = ["tool", "messaging", "setting"];
     const nonProvider = otherCategories.map((cat) => {
       const entries = Object.entries(vars).filter(
-        ([, info]) =>
+        ([key, info]) =>
           info.category === cat &&
           !info.channel_managed &&
-          (showAdvanced || !info.advanced),
+          visible(key, info),
       );
       const setEntries = entries.filter(([, info]) => info.is_set);
       const unsetEntries = entries.filter(([, info]) => !info.is_set);
@@ -869,7 +882,7 @@ export default function EnvPage() {
     // Sorted alphabetically; an in-flight (just-added, unsaved) row carries the
     // custom category locally so it shows here immediately.
     const customEntries = Object.entries(vars)
-      .filter(([, info]) => info.category === "custom" && !info.channel_managed)
+      .filter(([key, info]) => info.category === "custom" && !info.channel_managed && matchesQuery(key, info))
       .sort(([a], [b]) => a.localeCompare(b));
 
     return {
@@ -877,9 +890,10 @@ export default function EnvPage() {
       nonProviderGrouped: nonProvider,
       customEntries,
     };
-  }, [vars, showAdvanced, t]);
+  }, [vars, showAdvanced, query, t]);
 
   if (!vars) {
+    if (loadError) return <div role="alert" className="control-section space-y-3"><p className="text-sm text-destructive">Couldn’t load API keys: {loadError}</p><Button outlined onClick={() => setReload(value => value + 1)}>Retry</Button></div>;
     return (
       <div className="flex items-center justify-center py-24">
         <Spinner className="text-2xl text-primary" />
@@ -912,10 +926,11 @@ export default function EnvPage() {
         loading={keyClear.isDeleting}
       />
 
-      <div className="flex items-center justify-between">
+      <Input aria-label="Search API keys" placeholder="Search providers, keys and tools…" value={query} onChange={event => setQuery(event.target.value)} className="max-w-md" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <p className="text-sm text-muted-foreground">
-            {t.env.description} <code>{lunaHomePath(".env")}</code>
+            {embedded ? "Add a provider key or manage your existing connections." : <>{t.env.description} <code>{lunaHomePath(".env")}</code></>}
           </p>
           <p className="text-xs text-text-tertiary">
             {t.env.changesNote}
@@ -930,12 +945,12 @@ export default function EnvPage() {
         </Button>
       </div>
 
-      <div id="section-oauth">
+      {!embedded && <div id="section-oauth">
         <OAuthProvidersCard
           onError={(msg) => showToast(msg, "error")}
           onSuccess={(msg) => showToast(msg, "success")}
         />
-      </div>
+      </div>}
 
       <Card id="section-providers">
         <CardHeader className="border-b border-border bg-card">
@@ -955,6 +970,7 @@ export default function EnvPage() {
             <ProviderGroupCard
               key={group.name}
               group={group}
+              forceExpanded={!!query.trim()}
               edits={edits}
               setEdits={setEdits}
               revealed={revealed}
@@ -976,6 +992,7 @@ export default function EnvPage() {
           <EnvCategoryCard
             key={section.category}
             section={section}
+            forceShowAll={!!query.trim()}
             edits={edits}
             setEdits={setEdits}
             revealed={revealed}
@@ -1012,6 +1029,7 @@ export default function EnvPage() {
 
 function EnvCategoryCard({
   section,
+  forceShowAll = false,
   edits,
   setEdits,
   revealed,
@@ -1022,6 +1040,7 @@ function EnvCategoryCard({
   onCancelEdit,
   clearDialogOpen = false,
 }: {
+  forceShowAll?: boolean;
   section: {
     category: string;
     hint?: string;
@@ -1041,11 +1060,11 @@ function EnvCategoryCard({
   onCancelEdit: (key: string) => void;
   clearDialogOpen?: boolean;
 }) {
-  const noneConfigured = section.setEntries.length === 0;
-  const [showAll, setShowAll] = useState(noneConfigured);
+  const [showAll, setShowAll] = useState(false);
   const { t } = useI18n();
   const Icon = section.icon;
-  const hasContent = section.setEntries.length > 0 || showAll;
+  const expanded = showAll || forceShowAll;
+  const hasContent = section.setEntries.length > 0 || expanded;
   const rowProps = {
     edits,
     setEdits,
@@ -1076,7 +1095,7 @@ function EnvCategoryCard({
               aria-expanded={showAll}
               className="shrink-0 cursor-pointer border-0 bg-transparent p-0 font-mondwest text-xs tracking-[0.08em] text-text-secondary transition-colors hover:text-foreground"
             >
-              {showAll ? t.env.showLess : t.env.showMore}
+              {expanded ? t.env.showLess : t.env.showMore}
             </button>
           )}
         </div>
@@ -1099,7 +1118,7 @@ function EnvCategoryCard({
             <EnvVarRow key={key} varKey={key} info={info} {...rowProps} />
           ))}
 
-          {showAll &&
+          {expanded &&
             section.unsetEntries.map(([key, info]) => (
               <EnvVarRow key={key} varKey={key} info={info} {...rowProps} />
             ))}

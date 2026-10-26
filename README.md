@@ -18,6 +18,8 @@ On Linux, an AppImage may need **Properties → Permissions → Allow executing 
 macOS requires version 14 or newer. macOS and Windows installers are unsigned alpha previews;
 see the release notes for tested platforms and limitations.
 
+Models, account sign-in, API keys and appearance live in **Control Center**.
+
 Memory setup manages Docker/Compose and a local Honcho stack. Its reasoning model can follow
 your companion's model. OpenCode's free model availability depends on its providers.
 

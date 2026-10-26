@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
 import { OAuthProvidersCard } from "@/components/OAuthProvidersCard";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { api, fetchJSON } from "@/lib/api";
 import { errorMessage } from "@/lib/api-error";
 
 type Route = { configured: boolean; source: string; provider?: string; model?: string; reasoning_effort?: string; detail?: string };
 
-export function MemoryReasoningSelector() {
+export function MemoryReasoningSelector({ compact = false }: { compact?: boolean }) {
   const [route, setRoute] = useState<Route | null>(null);
   const [picker, setPicker] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -20,38 +21,36 @@ export function MemoryReasoningSelector() {
     catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   };
-  return <div className="space-y-2">
-    <label className="flex items-center gap-2 text-sm">
-      <input type="radio" name="memory-reasoning" checked={route?.source !== "custom"} disabled={busy} onChange={() => void selectCompanion()} />
-      Use my companion’s model (recommended)
-    </label>
-    <p className="text-xs text-muted-foreground" aria-live="polite">
-      {route?.configured ? `${route.provider} · ${route.model}` : route?.detail || "Checking your model…"}
-      {route?.source !== "custom" && " · Follows changes to your companion’s model."}
-    </p>
-    <Button outlined size="sm" disabled={busy} onClick={() => setPicker(true)}>Choose another model</Button>
-    <label className="flex flex-col gap-1 text-sm">
-      Honcho reasoning effort
-      <select className="rounded border bg-background px-2 py-1" value={route?.reasoning_effort || "default"}
-        disabled={busy || !route?.configured} onChange={async event => {
-          const effort = event.target.value;
+  return <div className="space-y-5">
+    <div className="onboarding-setting-row">
+      <div className="min-w-0">
+        <span className="text-sm font-medium">Memory model</span>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Memory model source">
+          <Button outlined={route?.source === "custom"} size="sm" aria-pressed={route?.source !== "custom"} disabled={busy || !route} onClick={() => void selectCompanion()}>Companion’s model</Button>
+          <Button outlined size="sm" aria-pressed={route?.source === "custom"} disabled={busy} onClick={() => setPicker(true)}>Choose another</Button>
+        </div>
+        {route?.configured && <p className="mt-2 truncate text-xs text-muted-foreground" aria-live="polite">{route.model?.split("/").at(-1)}</p>}
+      </div>
+    </div>
+    <div className="onboarding-setting-row">
+      <label htmlFor="memory-reasoning-effort" className="text-sm font-medium">Reasoning effort</label>
+      <Select id="memory-reasoning-effort" label="Memory reasoning effort" className="sm:max-w-56" value={route?.reasoning_effort || "default"}
+        disabled={busy || !route?.configured} onValueChange={async effort => {
           setBusy(true); setError("");
           try { await api.saveConfig({ luna: { memory_stack: { reasoning_effort: effort } } }); await load(); }
           catch (e) { setError(errorMessage(e)); }
           finally { setBusy(false); }
-        }}>
-        {["default", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].map(effort =>
-          <option key={effort} value={effort} disabled={route?.provider === "opencode-engine" && effort !== "default"}>
-            {effort === "default" ? "Provider default" : effort}
-          </option>)}
-      </select>
-    </label>
-    <p className="text-xs text-muted-foreground">Independent of your companion’s effort. Supported levels depend on the model; subscription connections map to supported levels.</p>
-    {route?.provider === "opencode-engine" && <p className="text-xs text-muted-foreground">Native OpenCode currently exposes provider default only.</p>}
-    <details><summary className="cursor-pointer text-sm">Connect another account</summary>
-      <OAuthProvidersCard guided onError={setError} onSuccess={() => { void load().catch(e => setError(errorMessage(e))); }} />
-    </details>
-    <p className="text-xs text-muted-foreground">Memory reasoning shares the selected connection’s usage limits and cost. Embeddings run locally without a model account.</p>
+        }} options={["default", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].map(effort => ({
+          value: effort, label: effort === "default" ? "Provider default" : effort[0].toUpperCase() + effort.slice(1),
+          disabled: route?.provider === "opencode-engine" && effort !== "default",
+        }))} />
+    </div>
+    <details><summary className="onboarding-disclosure">Connection options</summary><div className="space-y-3 pt-4">
+      <p className="text-xs text-muted-foreground">Memory effort is independent of chat. {route?.provider === "opencode-engine" ? "OpenCode supports provider default only." : "Available levels depend on your model."}</p>
+      {route && !route.configured && <p className="text-xs text-muted-foreground">{route.detail}</p>}
+      <OAuthProvidersCard guided compact={compact} onError={setError} onSuccess={() => { void load().catch(e => setError(errorMessage(e))); }} />
+      {!compact && <p className="text-xs text-muted-foreground">Uses the selected account’s limits and pricing. Embeddings run locally.</p>}
+    </div></details>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {picker && <ModelPickerDialog loader={api.getModelOptions} alwaysGlobal title="Choose memory reasoning model"
       onClose={() => setPicker(false)} onApply={async ({ provider, model }) => {

@@ -43,7 +43,7 @@ describe("native OpenCode setup", () => {
     expect(opencodeApi.models).not.toHaveBeenCalled();
     await click("Install OpenCode");
     expect(opencodeApi.install).toHaveBeenCalledOnce();
-    expect(container.querySelector("select")?.value).toBe("opencode/test-free");
+    expect(container.querySelector('[role="combobox"]')?.textContent).toContain("Test Free");
     expect(container.querySelector('input[type="password"]')).toBeNull();
   });
 

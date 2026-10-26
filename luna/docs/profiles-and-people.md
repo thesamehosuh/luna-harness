@@ -32,7 +32,7 @@ entries, starts a gateway or brings up Docker during import.
 Defaults come from the product's checked-in new-user template, never a developer's installed
 configuration. Fresh homes and fresh named profiles start with:
 
-- A short neutral, editable companion named **Companion** in `luna/soul/DEFAULT.md`. Luna names
+- A neutral, editable companion named **Companion** in `luna/soul/DEFAULT.md`. Luna names
   the harness; the user chooses their character's name. `luna/soul/SOUL.md` remains the optional
   Luna example character. Existing custom personas and names are preserved. Room and TUI speaker
   labels follow the selected persona instead of forcing the harness name.
@@ -82,3 +82,8 @@ Regression coverage includes round-trip export/import into two clean profiles, c
 exclusion, invalid/oversized files, existing-profile refusal, failed-publication cleanup, fresh and
 partial-config defaults, Honcho JSON compatibility, guarded model writes, unknown IDs, room/DM/profile
 isolation and `luna/tests/fixtures/people/multiple_groups.json` replay.
+
+Setup and Character share four persona starting points: Easygoing, Warm friend, Dry wit and
+Curious mind. Voice samples appear in Setup; the complete prompts are available before applying.
+Custom personas remain a separate choice. Selecting a preset is explicit; updates never replace
+an existing persona automatically.

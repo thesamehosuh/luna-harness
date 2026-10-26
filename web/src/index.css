@@ -102,7 +102,13 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+  background: var(--background-base);
 }
+
+/* Native webviews should paint the application canvas throughout navigation.
+   The vendor stylesheet opts every document into screenshot crossfades. */
+@view-transition { navigation: none; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 
 code, kbd, pre, samp, .font-mono, .font-mono-ui {
   font-family: var(--theme-font-mono);
@@ -304,7 +310,7 @@ html[dir="rtl"] {
 
 /* A coherent Luna shell shared by every route. Custom palettes and font choices still cascade. */
 .luna-shell {
-  background-image: radial-gradient(ellipse at 80% 0%, color-mix(in srgb, var(--color-primary) 7%, transparent), transparent 48%);
+  isolation: isolate;
 }
 .luna-sidebar {
   background: color-mix(in srgb, var(--color-card) 60%, var(--background-base));
@@ -331,6 +337,37 @@ html[dir="rtl"] {
   margin-inline-start: auto;
   background: var(--color-primary);
 }
+.luna-nav-link { min-height: 42px; }
+.sidebar-more > summary::-webkit-details-marker { display: none; }
+.sidebar-more[open] > summary > svg:last-child { transform: rotate(180deg); }
+.control-center { padding-block: 4px; }
+.control-tabs { display: flex; gap: 5px; overflow-x: auto; border-bottom: 1px solid var(--color-border); padding-bottom: 12px; }
+.control-tab { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; padding: 10px 15px; border-radius: var(--radius-control); color: var(--text-secondary); font-size: 0.875rem; text-decoration: none; }
+.control-tab:hover { background: var(--color-accent); }
+.control-tab.is-active { background: color-mix(in srgb, var(--color-primary) 13%, transparent); color: var(--color-primary); }
+.control-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.control-section { border: 1px solid var(--color-border); border-radius: var(--radius-panel); padding: 24px; background: var(--color-card); }
+.control-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; flex-shrink: 0; border-radius: 14px; background: color-mix(in srgb, var(--color-primary) 11%, transparent); color: var(--color-primary); }
+.model-choice { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--color-border); border-radius: var(--radius-control); padding: 18px; background: var(--background-base); cursor: pointer; }
+.model-choice:hover { border-color: var(--color-primary); }
+.control-link { display: flex; gap: 14px; padding: 20px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); text-decoration: none; background: var(--color-card); }
+.control-link:hover { border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border)); background: var(--color-accent); }
+.control-note { padding: 8px 6px 12px; }
+.control-search:focus-within { outline: 2px solid var(--color-ring); outline-offset: 3px; }
+.control-search input:focus-visible { outline: none; }
+.route-skeleton { min-height: 220px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-card); }
+.chat-heading { display: flex; align-items: center; gap: 12px; padding: 8px 0 20px; }
+.chat-toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px; padding-block: 8px; border-block: 1px solid var(--color-border); }
+.chat-model-controls { flex: 1; min-width: 0; }
+.chat-model-controls .text-display { letter-spacing: normal; }
+.chat-control-notice { display: flex; align-items: flex-start; gap: 8px; margin-block: 8px 2px; max-width: 700px; font-size: 12px; line-height: 1.8; color: var(--text-secondary); }
+.chat-copy-button { margin-inline-start: auto; }
+.chat-canvas { padding: 8px 0 0; }
+.hermes-chat-xterm-host { contain: layout style; }
+.hermes-chat-xterm-host .xterm { padding-inline: 2px; }
+.hermes-chat-xterm-host .xterm-viewport { overscroll-behavior: contain; }
+@media (max-width: 640px) { .chat-heading { gap: 5px; padding-bottom: 14px; } .chat-heading > button { padding-inline: 10px; } .chat-toolbar { gap: 0; } }
+@media (min-width: 1280px) { .control-columns { grid-template-columns: minmax(0, 1fr) 290px; } }
 .luna-page-title {
   font-family: var(--theme-font-display);
   font-size: clamp(1.8rem, 2.3vw, 2.5rem);
@@ -416,3 +453,85 @@ button.text-display:focus-visible {
   }
 }
 
+
+/* Small, consistent interaction feedback without moving the page canvas. */
+.control-tab, .control-link, .model-choice, .sidebar-more > summary { transition: background-color 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out; }
+.sidebar-more > summary:hover { color: var(--midground); background: var(--color-accent); }
+.model-choice:hover { background: var(--color-accent); border-color: var(--color-primary); }
+button:focus-visible, summary:focus-visible, .control-link:focus-visible, .control-tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+
+/* xterm's scroll container has its own opaque default canvas. Keep every
+   terminal layer on the selected chat background, including the left gutter. */
+.chat-canvas .xterm, .chat-canvas .xterm-viewport, .chat-canvas .xterm-screen { background-color: var(--chat-background) !important; }
+
+.model-picker { height: min(720px, calc(100dvh - 48px)); }
+.model-picker-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); overflow: hidden; }
+.model-picker-provider { display: flex; width: 100%; gap: 10px; margin-bottom: 4px; border: 1px solid transparent; border-radius: var(--radius-control); padding: 12px; text-align: left; font-size: 13px; transition: background-color 140ms, border-color 140ms; cursor: pointer; }
+.model-picker-provider:hover, .model-picker-model:hover { background: var(--color-accent); }
+.model-picker-provider.is-active { background: color-mix(in srgb, var(--color-primary) 12%, transparent); border-color: color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.model-picker-model { display: flex; align-items: center; width: 100%; gap: 12px; min-height: 48px; padding: 12px; margin-bottom: 5px; border: 1px solid transparent; border-radius: var(--radius-control); font-size: 14px; transition: background-color 140ms, border-color 140ms; cursor: pointer; }
+.model-picker-model.is-active { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 9%, transparent); }
+@media (max-width: 640px) {
+  .model-picker { height: calc(100dvh - 32px); }
+  .model-picker-body { display: flex; flex-direction: column; }
+  .model-picker-connections { display: flex; flex-shrink: 0; gap: 5px; border-right: 0; border-bottom: 1px solid var(--color-border); overflow-x: auto; }
+  .model-picker-provider { flex-shrink: 0; width: 170px; }
+  .model-picker-models { flex: 1; }
+  .model-picker footer > div:last-child { flex-wrap: wrap; }
+}
+
+/* Onboarding: one decision per page, compact progress and quiet disclosures. */
+.onboarding-steps { display: flex; width: 100%; gap: .5rem; }
+.onboarding-steps > button { flex: 1; min-width: 0; display: flex; align-items: center; gap: .55rem; padding: .6rem .45rem; border: 0; border-bottom: 2px solid var(--color-border); border-radius: 0; color: var(--color-muted-foreground); font-size: .8rem; cursor: pointer; transition: color 150ms, border-color 150ms, background-color 150ms; }
+.onboarding-steps > button:hover { color: var(--color-foreground); background: color-mix(in srgb, var(--color-primary) 5%, transparent); }
+.onboarding-steps > button[aria-current] { color: var(--color-primary); border-color: var(--color-primary); }
+.onboarding-steps > button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.onboarding-step-number { width: 1.65rem; height: 1.65rem; display: grid; place-items: center; flex-shrink: 0; border-radius: 50%; background: color-mix(in srgb, var(--color-muted-foreground) 10%, transparent); font-size: .75rem; }
+[aria-current] > .onboarding-step-number { background: color-mix(in srgb, var(--color-primary) 15%, transparent); }
+.onboarding-connections { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.onboarding-connections > button, .onboarding-personas > button { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: .6rem; min-width: 0; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-control); text-align: left; color: var(--color-muted-foreground); background: transparent; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms; }
+.onboarding-connections > button:hover, .onboarding-personas > button:hover { background: color-mix(in srgb, var(--color-primary) 5%, transparent); border-color: color-mix(in srgb, var(--color-primary) 55%, transparent); }
+.onboarding-connections > button[aria-pressed=true], .onboarding-personas > button[aria-checked=true] { color: var(--color-foreground); border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 8%, transparent); }
+.onboarding-connections > button[aria-pressed=true] > svg, .onboarding-personas > button[aria-checked=true] > svg { color: var(--color-primary); }
+.onboarding-connections > button:focus-visible, .onboarding-personas > button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.onboarding-personas { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .75rem; }
+.onboarding-persona-check { position: absolute; top: 1rem; right: 1rem; }
+.onboarding-feature { display: flex; align-items: center; gap: 1rem; color: var(--color-muted-foreground); font-size: .9rem; padding-bottom: .5rem; }
+.onboarding-feature > svg { color: var(--color-primary); flex-shrink: 0; }
+.onboarding-quiet-link { display: inline-flex; align-items: center; gap: .5rem; font-size: .85rem; color: var(--color-muted-foreground); transition: color 150ms; border-radius: 0; }
+.onboarding-quiet-link:hover { color: var(--color-primary); }
+.onboarding-disclosure { cursor: pointer; color: var(--color-muted-foreground); font-size: .8rem; transition: color 150ms; }
+.onboarding-disclosure:hover { color: var(--color-foreground); }
+.onboarding-finish { display: inline-flex; align-items: center; gap: .7rem; padding: .6rem 1rem; border-radius: var(--radius-control); background: var(--color-primary); color: var(--color-primary-foreground); font-size: .9rem; transition: opacity 150ms; }
+.onboarding-finish:hover { opacity: .85; }
+/* Portalled menus inherit the theme and stay inside the viewport. */
+.luna-select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 2.6rem; width: 100%; padding: .55rem .8rem; border: 1px solid var(--color-input); border-radius: var(--radius-control); background: var(--color-background); color: var(--color-foreground); text-align: left; font-size: .875rem; cursor: pointer; transition: border-color 150ms, background-color 150ms; }
+.luna-select-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.luna-select-trigger:hover, .luna-select-trigger[data-state=open] { border-color: var(--color-primary); }
+.luna-select-trigger:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.luna-select-trigger:disabled { cursor: not-allowed; opacity: .5; }
+.luna-select-menu { z-index: 100; min-width: var(--radix-select-trigger-width); max-width: calc(100vw - 24px); max-height: min(20rem, var(--radix-select-content-available-height)); overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-card); color: var(--color-foreground); box-shadow: 0 12px 32px #0004; }
+.luna-select-option { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-radius: calc(var(--radius-control) - 3px); padding: .6rem .75rem; font-size: .875rem; cursor: pointer; outline: none; transition: background-color 120ms; }
+.luna-select-option[data-highlighted] { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.luna-select-option[data-state=checked] { color: var(--color-primary); }
+.luna-select-option[data-disabled] { opacity: .4; pointer-events: none; }
+.luna-select-scroll { display: flex; justify-content: center; padding: .25rem; color: var(--color-muted-foreground); }
+@media (max-width: 540px) {
+  .onboarding-steps { gap: .25rem; }
+  .onboarding-steps > button { flex-direction: column; gap: .4rem; font-size: .7rem; padding-inline: 0; }
+  .onboarding-connections { gap: .5rem; }
+  .onboarding-connections > button { padding: .8rem .6rem; font-size: .8rem; }
+  .onboarding-connections > button > span:last-child { font-size: .65rem; }
+}
+
+.onboarding-setting-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+.onboarding-setting-row + .onboarding-setting-row { padding-top: 1.25rem; border-top: 1px solid var(--color-border); }
+.onboarding-card-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--color-border); }
+.onboarding-token-row { display: flex; align-items: center; gap: .75rem; }
+.onboarding-token-row > input { flex: 1; min-width: 0; }
+.onboarding-personas > label { position: relative; display: flex; flex-direction: column; gap: .75rem; padding: 1.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-control); cursor: pointer; transition: background-color 150ms, border-color 150ms; }
+.onboarding-personas > label:hover { border-color: color-mix(in srgb, var(--color-primary) 55%, transparent); background: color-mix(in srgb, var(--color-primary) 4%, transparent); }
+.onboarding-personas > label[data-selected=true] { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, transparent); }
+.onboarding-personas > label:focus-within { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.onboarding-persona-sample { font-size: .8rem; line-height: 1.65; color: var(--color-muted-foreground); }
+@media (min-width: 600px) { .onboarding-personas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

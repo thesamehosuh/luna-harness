@@ -80,6 +80,15 @@ this checkout only; it does not resolve the slim-runtime packaging gap or author
 
 ---
 
+## Desktop interaction pass — 2026-10-26
+
+The launcher, Control Center, chat toolbar and guided Setup have been updated in the desktop-polish
+branch. System actions remain visible outside More. Chat colors live in Preferences; the embedded
+Ink chat remains the primary conversation UI. Setup and Character share the new persona library.
+See `luna/docs/desktop-polish.md` for the implemented scope and rendering evidence. The older
+verification/environment notes above and below are historical; the checkout venv now runs both
+Luna and the bounded engine contract subset. No release is authorized by this pass.
+
 ## 0.0 Environment facts — read this before running anything
 
 Every item here cost real time to discover. They are facts about the machine and the scripts, not
