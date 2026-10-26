@@ -155,6 +155,7 @@ _STATIC: Dict[str, Dict[str, Any]] = {
     "luna.setup.telegram": _select("Optional Telegram setup choice; dashboard chat works independently.", "pending", "enabled", "skipped"),
     "luna.opencode.timeout_seconds": _num("Maximum wait for a native OpenCode reply.", minimum=30, maximum=1800, step=1),
     "luna.memory_stack.reasoning_source": _select("Use the companion's current connection or an explicit memory model.", "companion", "custom"),
+    "luna.memory_stack.reasoning_effort": _select("Memory reasoning effort, independent of the companion. Native OpenCode currently supports provider default only.", "default", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"),
     "luna.memory_stack.docker_context": _text("Advanced: a local Docker context for this installation. Empty reuses the current local engine or Luna's recorded Desktop context."),
     "luna.memory_stack.provider": _text("Configured provider for an explicit memory reasoning model."),
     "luna.memory_stack.embedding_source": _select("Bundled CPU embeddings, or an advanced existing endpoint. Changing a populated index requires migration.", "bundled", "custom"),

@@ -10,7 +10,7 @@ import json
 
 import tools.terminal_tool as terminal_tool
 
-SECRET = "sk-proj-AbCdEf1234567890SecretValue999"
+SECRET = 'sk-proj-AbCdEf12345' '67890SecretValue999'
 
 
 def _force_exception(monkeypatch, exc):

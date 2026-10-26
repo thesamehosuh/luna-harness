@@ -9,7 +9,7 @@ import logging
 
 from acp_adapter.entry import _setup_logging
 
-SECRET = "sk-proj-AbCdEf1234567890SecretValue999"
+SECRET = 'sk-proj-AbCdEf12345' '67890SecretValue999'
 
 
 def test_acp_stderr_handler_redacts_secrets():

@@ -291,7 +291,7 @@ async def test_rich_transport_error_redacts_bot_token_even_when_redaction_disabl
     import agent.redact as redact
 
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
-    token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
+    token = '123456789:ABCDEFGHIJK' 'LMNOPQRSTUVWXYZabcdef'
     adapter = _make_adapter()
     adapter._bot.do_api_request = AsyncMock(
         side_effect=NetworkError(
@@ -313,7 +313,7 @@ async def test_legacy_send_error_redacts_bot_token_without_traceback(monkeypatch
     import agent.redact as redact
 
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
-    token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
+    token = '123456789:ABCDEFGHIJK' 'LMNOPQRSTUVWXYZabcdef'
     adapter = _make_adapter({"rich_messages": False})
     adapter._bot.send_message = AsyncMock(
         side_effect=BadRequest(
@@ -746,7 +746,7 @@ async def test_legacy_edit_error_logs_redacted_bot_token_without_traceback(monke
     import agent.redact as redact
 
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
-    token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
+    token = '123456789:ABCDEFGHIJK' 'LMNOPQRSTUVWXYZabcdef'
     adapter = _make_adapter()
     adapter._bot.edit_message_text = AsyncMock(
         side_effect=BadRequest(

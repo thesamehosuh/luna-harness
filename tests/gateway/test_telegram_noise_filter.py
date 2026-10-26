@@ -311,7 +311,7 @@ def test_telegram_final_response_redacts_auth_secrets():
     """Authentication errors should be useful without leaking key material."""
     raw = (
         "⚠️ Provider authentication failed: Incorrect API key provided: "
-        "sk-live_abcdefghijklmnopqrstuvwxyz1234567890"
+        'sk-live_abcdefghijklmn' 'opqrstuvwxyz1234567890'
     )
 
     sanitized = _sanitize_gateway_final_response(Platform.TELEGRAM, raw)

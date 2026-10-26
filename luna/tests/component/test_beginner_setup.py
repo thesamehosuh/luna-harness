@@ -272,3 +272,50 @@ def test_memory_disable_waits_for_inflight_restore(setup_home, monkeypatch):
         proceed.set(); first.join(5); second.join(5)
     assert not first.is_alive() and not second.is_alive()
     assert calls[-1] == "stop"
+
+
+def test_subscription_onboarding_recognizes_login_without_api_key(setup_home, monkeypatch):
+    from luna_cli import onboarding
+    from hermes_cli import auth
+    monkeypatch.setattr(onboarding, "_config", lambda: {"model": {"provider": "openai-codex", "default": "subscription-fixture"}})
+    monkeypatch.setattr(onboarding, "_secret", lambda key: "")
+    monkeypatch.setattr(auth, "get_auth_status", lambda provider: {"logged_in": provider == "openai-codex"})
+    result = onboarding.check_provider()
+    assert result["configured"] is True
+    assert result["account_connected"] is True
+    assert result["key_required"] is False
+    assert "missing" not in result["detail"]
+    monkeypatch.setattr(auth, "get_auth_status", lambda provider: {"logged_in": False})
+    assert onboarding.check_provider()["configured"] is False
+
+
+@pytest.mark.parametrize("provider,effort,expected", [
+    ("openai-codex", "high", {"extra_body": {"reasoning": {"enabled": True, "effort": "high"}}}),
+    ("openai-codex", "none", {"extra_body": {"reasoning": {"enabled": False}}}),
+    ("custom", "low", {"reasoning_effort": "low"}),
+    ("custom", "default", {}),
+])
+def test_memory_effort_is_independent_and_reaches_transport(setup_home, monkeypatch, provider, effort, expected):
+    from luna_core import memory_reasoning
+    from hermes_cli import runtime_provider
+    from agent import auxiliary_client
+    calls = []
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: (
+        calls.append(kwargs) or SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="OK"))], usage=None)))))
+    monkeypatch.setattr(memory_reasoning.config_read, "section", lambda *path, **kw:
+        {"provider": provider, "default": "fixture-model"} if path == ("model",) else {"reasoning_effort": effort})
+    monkeypatch.setattr(runtime_provider, "resolve_runtime_provider", lambda **kwargs: {"provider": provider})
+    monkeypatch.setattr(auxiliary_client, "resolve_provider_client", lambda *args, **kwargs: (client, "fixture-model"))
+    assert memory_reasoning.public_route()["reasoning_effort"] == effort
+    memory_reasoning.complete({"messages": [{"role": "user", "content": "Synthetic evidence"}]})
+    for key, value in expected.items():
+        assert calls[0][key] == value
+    if effort == "default":
+        assert "reasoning_effort" not in calls[0] and "extra_body" not in calls[0]
+
+
+def test_native_memory_effort_never_silently_ignored(setup_home, monkeypatch):
+    from luna_core import memory_reasoning
+    monkeypatch.setattr(memory_reasoning, "route", lambda: {"provider": "opencode-engine", "model": "opencode/fixture", "reasoning_effort": "high"})
+    with pytest.raises(ValueError, match="does not expose reasoning effort"):
+        memory_reasoning.complete({"messages": [{"role": "user", "content": "Synthetic evidence"}]})

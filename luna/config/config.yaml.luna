@@ -287,6 +287,7 @@ luna:
   # page stores these keys in .env. Existing Honcho stacks keep their own settings.
   memory_stack:
     reasoning_source: companion
+    reasoning_effort: default  # Independent of the companion; provider default until explicitly chosen.
     docker_context: ""
     provider: ""
     base_url: ""

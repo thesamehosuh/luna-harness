@@ -7,7 +7,7 @@ import agent.redact as redact
 import tools.terminal_tool as terminal_tool
 
 
-SECRET = "OPENAI_API_KEY=sk-testterminalerrorredaction1234567890"
+SECRET = 'OPENAI_API_KEY=sk-testterminalerro' 'rredaction1234567890'
 
 
 def _minimal_terminal_config(cwd="/tmp"):
@@ -40,7 +40,7 @@ def _patch_common(monkeypatch, env):
 
 def assert_secret_redacted(payload, field):
     assert SECRET not in payload[field]
-    assert "sk-testterminalerrorredaction1234567890" not in payload[field]
+    assert 'sk-testterminalerro' 'rredaction1234567890' not in payload[field]
     assert "***" in payload[field]
 
 

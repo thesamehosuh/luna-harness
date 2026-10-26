@@ -47,7 +47,7 @@ description: "逐步指南：为整个团队搭建一个 Telegram 机器人，�
 3. **复制机器人 token**——BotFather 会回复类似内容：
    ```
    Use this token to access the HTTP API:
-   7123456789:AAH1bGciOiJSUzI1NiIsInR5cCI6Ikp...
+   <YOUR_TOKEN>...
    ```
    保存此 token——下一步会用到。
 
@@ -97,7 +97,7 @@ hermes gateway setup
 
 ```bash
 # Telegram bot token from BotFather
-TELEGRAM_BOT_TOKEN=7123456789:AAH1bGciOiJSUzI1NiIsInR5cCI6Ikp...
+TELEGRAM_BOT_TOKEN=<YOUR_TOKEN>...
 
 # Your Telegram user ID (numeric)
 TELEGRAM_ALLOWED_USERS=123456789

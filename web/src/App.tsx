@@ -375,6 +375,7 @@ export default function App() {
   const isDocsRoute = pathname === "/docs" || pathname === "/docs/";
   const normalizedPath = pathname.replace(/\/$/, "") || "/";
   const isChatRoute = normalizedPath === "/chat";
+  const isSetupRoute = normalizedPath === "/onboarding";
   const embeddedChat = isDashboardEmbeddedChatEnabled();
   // Defer mounting the persistent chat host (and its xterm chunk) until the
   // user has actually opened /chat at least once. Sticky after that so the
@@ -525,6 +526,7 @@ export default function App() {
           "bg-background-base",
         )}
         style={{
+          display: isSetupRoute ? "none" : undefined,
           background:
             "var(--component-header-background, var(--background-base))",
           borderImage: "var(--component-header-border-image)",
@@ -548,7 +550,7 @@ export default function App() {
         <span className="luna-wordmark text-foreground">Luna</span>
       </header>
 
-      {mobileOpen && (
+      {mobileOpen && !isSetupRoute && (
         <Button
           ghost
           aria-label={t.app.closeNavigation}
@@ -564,7 +566,7 @@ export default function App() {
           fixed lg:hidden header is h-14/z-40; previously each banner carried
           its own mt-14 AND the content kept pt-14, so two visible banners
           stacked three offsets (NS-656 review P3). One spacer, applied once. */}
-      <div aria-hidden className="h-14 shrink-0 lg:hidden" />
+      {!isSetupRoute && <div aria-hidden className="h-14 shrink-0 lg:hidden" />}
       <PluginSlot name="header-banner" />
       <ProfileScopeBanner />
       <MemoryPressureBanner status={sidebarStatus} />
@@ -573,7 +575,7 @@ export default function App() {
         <div className="flex min-h-0 min-w-0 flex-1">
           <aside
             ref={sidebarRef}
-            inert={isMobile && !mobileOpen}
+            inert={isSetupRoute || (isMobile && !mobileOpen)}
             id="app-sidebar"
             aria-label={t.app.navigation}
             className={cn(
@@ -587,6 +589,7 @@ export default function App() {
               collapsed && "lg:w-[4.5rem]",
             )}
             style={{
+              display: isSetupRoute ? "none" : undefined,
               background:
                 "var(--component-sidebar-background, color-mix(in srgb, var(--color-card) 60%, var(--background-base)))",
               clipPath: "var(--component-sidebar-clip-path)",
@@ -754,7 +757,7 @@ export default function App() {
             </div>
           </aside>
 
-          <PageHeaderProvider pluginTabs={pluginTabMeta}>
+          <PageHeaderProvider pluginTabs={pluginTabMeta} hideHeader={isSetupRoute}>
             <div
               className={cn(
                 "relative z-2 flex min-w-0 min-h-0 flex-1 flex-col",

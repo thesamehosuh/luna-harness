@@ -27,7 +27,7 @@ ROOTS = frozenset({
 })
 LUNA_SECTIONS = frozenset({"character", "output", "room", "memory", "memory_stack", "ambient", "conversation", "data", "logs", "opencode"})
 BOOLEAN_ROOTS = frozenset({"group_sessions_per_user", "thread_sessions_per_user"})
-REASONING_FIELDS = frozenset({"reasoning_source", "provider", "base_url", "model", "api_key_env"})
+REASONING_FIELDS = frozenset({"reasoning_effort", "reasoning_source", "provider", "base_url", "model", "api_key_env"})
 SECRET = re.compile(r"(?:api[_-]?key|access[_-]?token|refresh[_-]?token|bot[_-]?token|password|secret|authorization|credential|private[_-]?key)", re.I)
 REFERENCE = re.compile(r"\$\{[A-Z][A-Z0-9_]*\}")
 LOCAL_FIELDS = frozenset({

@@ -1,0 +1,42 @@
+name: Luna security checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39
+        with:
+          version: "0.13.5"
+          python-version: "3.11"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 26
+      - name: Install verified secret scanner
+        run: |
+          curl --fail --location --retry 3 https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum --check
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+      - name: Verify scanner rejection of synthetic credential types
+        run: python scripts/check_secret_scanner.py /tmp/gitleaks
+      - name: Scan complete Git history with redacted findings
+        run: /tmp/gitleaks git --redact --no-banner --log-opts=--all
+      - name: Audit every Python and JavaScript lock
+        run: python scripts/check_dependency_security.py
+      - name: Install Rust advisory scanner
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit native dependencies
+        working-directory: apps/bootstrap-installer/src-tauri
+        # Tauri GTK3 needs glib 0.18. The exact upstream fix is vendored and
+        # checked above; this exemption cannot cover an unpatched registry crate.
+        run: cargo audit --ignore RUSTSEC-2024-0429

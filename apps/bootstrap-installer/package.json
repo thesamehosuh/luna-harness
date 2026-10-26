@@ -2,7 +2,7 @@
   "name": "@hermes/bootstrap-installer",
   "private": true,
   "version": "0.21.1",
-  "description": "Luna desktop launcher — installs a verified runtime and opens its local dashboard.",
+  "description": "Luna desktop launcher \u2014 installs a verified runtime and opens its local dashboard.",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5175",
@@ -31,7 +31,7 @@
     "@vscode/codicons": "0.0.45",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "katex": "0.16.47",
+    "katex": "0.18.2",
     "lucide-react": "0.577.0",
     "nanostores": "1.4.2",
     "radix-ui": "1.6.7",
@@ -47,6 +47,6 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.3",
     "typescript": "6.0.3",
-    "vite": "8.2.0"
+    "vite": "8.2.4"
   }
 }

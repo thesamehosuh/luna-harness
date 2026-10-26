@@ -1,6 +1,6 @@
 [package]
 name = "luna-launcher"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 description = "Luna — verified runtime bootstrap and local dashboard launcher"
 authors = ["Luna contributors", "Nous Research (vendored bootstrap)"]
 edition = "2021"
@@ -33,7 +33,7 @@ tauri-plugin-shell = "2"
 sha2 = "0.10"
 flate2 = "1"
 tar = "0.4"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 fs2 = "0.4"
 semver = "1"
 
@@ -85,3 +85,7 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+# Upstream fix for GHSA-wrw7-89jp-8q8g backported to Tauri GTK3’s glib line.
+[patch.crates-io]
+glib = { path = "vendor/glib" }

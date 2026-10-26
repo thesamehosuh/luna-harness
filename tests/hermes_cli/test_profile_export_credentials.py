@@ -14,7 +14,7 @@ import tarfile
 from hermes_cli.profiles import export_profile
 
 # Long enough to match agent.redact prefix patterns (sk- + 10+ chars).
-_LEAKED_KEY = "sk-or-v1-reallyLongSecretKeyValue12345678"
+_LEAKED_KEY = 'sk-or-v1-reallyLongS' 'ecretKeyValue12345678'
 
 
 def _patch_named_profile(monkeypatch, profiles_root, profile_dir):

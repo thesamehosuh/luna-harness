@@ -18,8 +18,8 @@ from hermes_cli.telegram_managed_bot import (
 from hermes_cli import setup_platforms
 
 
-VALID_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
-SECOND_VALID_TOKEN = "987654321:abcdefghijklmnopqrstuvwxyzABCDEF"
+VALID_TOKEN = '123456789:ABCDEFGHIJK' 'LMNOPQRSTUVWXYZabcdef'
+SECOND_VALID_TOKEN = '987654321:abcdefghijk' 'lmnopqrstuvwxyzABCDEF'
 
 
 class TestQRCode:

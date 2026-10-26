@@ -379,3 +379,19 @@ command test and real Windows archive installation cover this contract.
 - Alpha 2: `agent/auxiliary_client.py` forwards the caller timeout through the
   Anthropic auxiliary adapter, including memory reasoning. Covered by the adapter
   timeout regression in the companion setup component tests.
+
+Security and guided setup (2026-10-26):
+- `pyproject.toml`, `uv.lock`, npm manifests/locks and `.npmrc` raise reviewed vulnerable versions
+  to patched releases. `tools/lazy_deps.py` uses the same patched optional dependency pins.
+- `web/src/App.tsx` and `web/src/contexts/PageHeaderProvider.tsx` hide dashboard navigation during
+  the focused Setup flow. Existing routes, profile isolation and chat lifetime are preserved.
+- Credential-shaped test literals are split into adjacent strings in inherited tests; their
+  runtime values and redaction assertions are unchanged. Documentation uses token placeholders.
+- The native launcher's GTK3/glib backport is documented under
+  `apps/bootstrap-installer/src-tauri/vendor/README.md` and gated by its exact source hash.
+- Retired the inherited `nix/`, `flake.nix` and `flake.lock` packaging path. It builds
+  the upstream Hermes/Electron distribution, not Luna's released thin launcher, and
+  carried an independent stale node-gyp lock. Supported Luna installers are documented
+  in the root README and desktop-release guide.
+- `web/vite.config.ts` initializes the optional compiler filter under the patched Vite
+  types. The runtime bundle filter is unchanged.

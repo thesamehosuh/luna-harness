@@ -1,44 +1,48 @@
-# Luna 0.1.0-alpha.2
+# Luna 0.1.0-alpha.3
 
-Fixes memory reasoning with Codex and Anthropic subscription adapters, and restores enabled
-memory containers on launch even when the local worker keeps its previous port. Existing
-characters, connections and memory data are preserved.
+Guided, page-by-page setup now includes browser subscription login and the live model picker.
+Honcho can share the companion’s model while using its own reasoning effort. Linux AppImages
+add **Luna Harness** to the application menu and keep a launcher copy for menu/login startup.
+
+This release refreshes vulnerable Python, JavaScript and native dependencies. Security checks
+now gate release builds: complete-history secret scanning, all Python/npm locks and native
+advisories. The GTK3 dependency includes the upstream pointer-safety fix. Old alphas remain
+withdrawn. No personal credentials, personas or memory data are included in release artifacts.
 
 ## Install
 
-Download the launcher for your system below. It downloads the exact checksummed runtime from
-this release and opens Setup inside the app. No Git, Python, Node or terminal is required.
+Download the launcher for your system. It downloads the verified runtime and opens Setup inside
+the app. Git, Python, Node and terminal commands are not required.
 
-- **Linux x64/ARM64:** AppImage, Debian and RPM packages. For AppImage, enable “Allow executing
-  as a program” in the file's Properties if your desktop requires it.
-- **macOS 14+ Intel/Apple Silicon:** unsigned DMG preview. Publisher signing/notarization is pending;
-  this is not yet a frictionless beginner installation on macOS.
-- **Windows x64:** unsigned installer preview. Windows remains preview while clean-machine
-  Docker/restart and full chat acceptance are completed. Windows ARM is not supported.
+- Linux x64/ARM64: AppImage, Debian and RPM packages. For AppImage, enable “Allow executing as a
+  program” in Properties if your desktop requires it. Its first launch adds the app-menu entry.
+- macOS 14+ Intel/Apple Silicon: unsigned DMG preview; publisher signing/notarization is pending.
+- Windows x64: unsigned installer preview. Windows ARM is not supported.
 
-Existing Hermes/Luna homes are preserved. Start with a clean setup; importing connections and
-persona is a separate dashboard choice. Please keep your working installation until your trial
-succeeds. Use one running gateway per Telegram bot token.
+Existing homes are preserved. Your previous personal migration can be adopted by the launcher;
+new users get clean setup. Keep one running gateway per Telegram bot token.
 
-## Included
+## Setup
 
-- Dashboard onboarding, character editing, profile import/export and Sakura Dusk default theme.
-- OpenCode model discovery, including provider-offered free choices; paid APIs are optional.
-- Optional local Honcho memory with a bundled small multilingual CPU embedding model, dashboard
-  reasoning/cadence controls and a basic editable PEOPLE.md fallback.
-- Bounded group turn-taking, pinned recipients/topics and privacy/output enforcement.
-- Optional ambient wakes, disabled by default. Strict Jev responses, explicit routes, offline
-  stored-score replay, attempt accounting and transport-confirmed delivery receipts.
-- Launcher start/stop, background mode and opt-in launch at login.
+Choose OpenCode’s provider-offered free models, an API connection, or sign in with a supported
+subscription account. ChatGPT login uses OpenAI Codex. Pick the model you want; no particular
+paid model is hardcoded. Memory, Telegram and self-wakes can each be skipped.
+
+Memory reasoning follows the companion’s connection/model by default. Its effort is independent;
+choose provider default or a supported level. Native OpenCode currently exposes provider default
+only. Embeddings run locally with the bundled multilingual CPU model. Docker setup is managed
+when memory is enabled and can require an OS permission prompt or restart.
+
+Advanced agent, terminal, tool, channel, character and model controls remain available from Setup.
+The launcher provides companion start/stop, background mode and opt-in launch at login.
 
 ## Alpha limits
 
-CI exercises native builds and archive installation on the listed platforms; Linux additionally
-runs the real launcher through a native webview. Signing certificates are not configured. Real
-Telegram/model behavior, crowded-room judgment quality, and Docker installation on a fresh OS
-still require user acceptance. Free model availability and rate limits belong to providers.
-Memory is optional; Docker installation can need administrator approval or a restart.
+Publisher certificates are not configured. Real Telegram traffic, crowded-room judgment and
+fresh-machine Docker setup still need user acceptance. Free-model availability and rate limits
+belong to providers. The tracked OpenCode cold-start tool-catalog race remains under issue #6.
+The native scanner reports four upstream maintenance warnings; the security-gate guide records
+these and the narrowly checked GTK3 backport.
 
-Report issues at https://github.com/thesamehosuh/luna-harness/issues. Include your OS and the
-step that failed; do not upload credentials or personal chat history. SHA256SUMS and GitHub build
-provenance accompany these exact artifacts. They do not replace OS publisher signing.
+Report failures at https://github.com/thesamehosuh/luna-harness/issues without credentials or
+personal chat history. SHA256SUMS and build provenance accompany the exact artifacts.

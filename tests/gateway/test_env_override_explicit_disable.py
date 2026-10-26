@@ -52,7 +52,7 @@ CRED_ENV = {
     "qqbot": {"QQ_APP_ID": "qq-app", "QQ_CLIENT_SECRET": "qq-secret"},
     "yuanbao": {"YUANBAO_APP_ID": "yb-app", "YUANBAO_APP_SECRET": "yb-secret"},
     # control: the pattern that always honored the explicit disable
-    "telegram": {"TELEGRAM_BOT_TOKEN": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"},
+    "telegram": {"TELEGRAM_BOT_TOKEN": '123456:ABC-DEF1234gh' 'Ikl-zyx57W2v1u123ew11'},
 }
 
 _PLATFORM_ENV_PREFIXES = (

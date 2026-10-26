@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { CheckCircle2, Circle, Play, RefreshCw, Rocket } from "lucide-react";
+import { CheckCircle2, Circle, Play, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
@@ -13,6 +13,9 @@ import { errorMessage } from "@/lib/api-error";
 import { lunaHomePath } from "@/lib/luna-paths";
 import { api } from "@/lib/api";
 import OpenCodeSetup from "@/components/OpenCodeSetup";
+import { LunaMark } from "@/components/LunaMark";
+import { OAuthProvidersCard } from "@/components/OAuthProvidersCard";
+import { ModelPickerDialog } from "@/components/ModelPickerDialog";
 import { MemoryReasoningSelector } from "@/components/MemoryReasoningSelector";
 import {
   completionPercent,
@@ -25,6 +28,7 @@ import {
 
 const PROVIDER_PRESETS: Array<{ label: string; provider: string; baseUrl: string; keyEnv: string }> = [
   { label: "OpenCode (free models)", provider: "opencode-engine", baseUrl: "", keyEnv: "" },
+  { label: "Subscription / connected account", provider: "subscription", baseUrl: "", keyEnv: "" },
   { label: "OpenCode Zen", provider: "opencode", baseUrl: "https://opencode.ai/zen/v1", keyEnv: "OPENCODE_ZEN_API_KEY" },
   { label: "OpenRouter", provider: "openrouter", baseUrl: "https://openrouter.ai/api/v1", keyEnv: "OPENROUTER_API_KEY" },
   { label: "OpenAI", provider: "openai", baseUrl: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY" },
@@ -51,6 +55,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputClass = "rounded border bg-transparent px-2 py-1 text-sm";
 
 export default function OnboardingPage() {
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [activeStep, setActiveStep] = useState<string | null>(() => window.location.hash.replace("#step-", "") || null);
+  const [modelPicker, setModelPicker] = useState(false);
+  const [modelRevision, setModelRevision] = useState(0);
   const [steps, setSteps] = useState<StepReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -65,10 +73,19 @@ export default function OnboardingPage() {
   const { toast, showToast } = useToast();
   const { setEnd } = usePageHeader();
 
+  useEffect(() => { heading.current?.focus(); }, [activeStep, loading]);
+
   const load = useCallback(async () => {
     try {
       const report = await onboardingApi.get();
       setSteps(report.steps);
+      setActiveStep(previous => previous || firstIncomplete(report.steps) || report.steps[0]?.id || null);
+      const saved = report.steps.find(step => step.id === "provider");
+      if (saved?.configured === true) {
+        const preset = PROVIDER_PRESETS.find(item => item.provider === saved.provider)
+          || PROVIDER_PRESETS.find(item => item.provider === (saved.account_connected ? "subscription" : ""))!;
+        setProvider({ ...preset, model: String(saved.model || ""), baseUrl: String(saved.base_url || preset.baseUrl), keyEnv: String(saved.key_env || preset.keyEnv) });
+      }
     } catch (e) {
       showToast(`Could not load setup status: ${errorMessage(e)}`, "error");
     } finally {
@@ -229,30 +246,50 @@ export default function OnboardingPage() {
 
   const next = firstIncomplete(steps);
   const percent = completionPercent(steps);
+  const currentId = steps.some(step => step.id === activeStep) ? activeStep : next || steps[0]?.id;
+  const currentIndex = steps.findIndex(step => step.id === currentId);
+  const current = steps[currentIndex];
+  const canContinue = current?.id !== "provider" || current.status === "done" || current.configured === true;
+  const goTo = (id: string) => {
+    setActiveStep(id);
+    window.history.replaceState(null, "", `#step-${id}`);
+  };
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex items-center gap-2">
-        <Rocket className="h-5 w-5" />
-        <H2>Set up Luna</H2>
-        <Badge tone={percent === 100 ? "default" : "secondary"}>{percent}%</Badge>
+    <div className="mx-auto w-full max-w-3xl space-y-6 py-4 sm:py-10">
+      <div className="flex items-center justify-between gap-3">
+        <LunaMark className="h-12 w-12" />
+        <div className="flex items-center gap-3">
+          <Button ghost size="sm" onClick={load} disabled={busy !== null}><RefreshCw className="mr-1 h-3.5 w-3.5" />Check setup</Button>
+          <Link to="/chat" className="text-sm underline">Leave setup</Link>
+        </div>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Choose a chat model and a character, then start chatting. Telegram, long-term memory,
-        and Jev self-wakes are optional. You can return here whenever you want to enable them.
-      </p>
+      <h1 ref={heading} tabIndex={-1} className="luna-page-title text-3xl outline-none sm:text-4xl">
+        {steps.find(step => step.id === currentId)?.title || "Set up Luna"}
+      </h1>
+      <p className="text-sm text-muted-foreground">Make this space yours, one step at a time. Messaging, memory and self-wakes are optional. Your saved choices stay here when you return.</p>
       {steps.some(step => step.id === "provider" && (step.status === "done" || step.configured === true)) && (
         <Link to="/chat" className="inline-flex rounded border px-4 py-2 text-sm">Start chatting</Link>
       )}
 
-      {steps.map((step) => (
+      <nav aria-label="Setup steps" className="flex flex-wrap gap-2">
+        {steps.map((step, index) => <Button key={step.id} outlined={step.id !== currentId} size="sm"
+          aria-current={step.id === currentId ? "step" : undefined} disabled={busy !== null}
+          onClick={() => goTo(step.id)}>{index + 1}. {step.title}</Button>)}
+      </nav>
+      <div className="space-y-2">
+        <div className="h-1 overflow-hidden rounded bg-muted" role="progressbar" aria-label="Setup completion" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+          <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
+        </div>
+        <p className="text-xs text-muted-foreground" role="status">Step {currentIndex + 1} of {steps.length} · {percent}% saved</p>
+      </div>
+      {steps.filter(step => step.id === currentId).map((step) => (
         <Card key={step.id} id={`step-${step.id}`}>
-          <CardContent className="py-3">
+          <CardContent className="p-5 sm:p-7">
             <div className="flex flex-wrap items-center gap-2">
               <StepIcon status={step.status} />
               <H2 className="text-base">{step.title}</H2>
-              <Badge tone={step.status === "done" ? "default" : "secondary"}>{step.status}</Badge>
-              {next === step.id && <Badge tone="outline">next</Badge>}
+              <Badge tone={step.status === "done" ? "default" : "secondary"}>{step.status === "done" ? "Ready" : step.status === "skipped" ? "Skipped" : "Not set up"}</Badge>
               <span className="min-w-0 basis-full break-words text-xs text-muted-foreground sm:ml-auto sm:basis-auto">{step.detail}</span>
             </div>
 
@@ -282,6 +319,15 @@ export default function OnboardingPage() {
                 </Field>
                 {provider.provider === "opencode-engine" ? (
                   <div className="min-w-0 sm:col-span-2"><OpenCodeSetup onSaved={refresh} /></div>
+                ) : provider.provider === "subscription" ? (
+                  <div className="space-y-3 sm:col-span-2">
+                    <p className="text-sm text-muted-foreground">Sign in with your ChatGPT account using OpenAI Codex, or another supported account. Then choose a model. No separate API key is needed for subscription login.</p>
+                    <OAuthProvidersCard guided onError={message => showToast(message, "error")} onSuccess={() => {
+                      setModelRevision(value => value + 1);
+                      void refresh();
+                    }} />
+                    <Button onClick={() => setModelPicker(true)}>Choose companion model</Button>
+                  </div>
                 ) : (<>
                 <Field label="model">
                   <input
@@ -327,9 +373,10 @@ export default function OnboardingPage() {
               <div className="grid max-w-2xl grid-cols-1 gap-3 pt-3 sm:grid-cols-2">
                 <p className="text-xs text-muted-foreground sm:col-span-2">
                   Create a bot with @BotFather, paste the token below, then add the bot to your group
-                  and send a message. Copy the group chat id (or use the Channels page to pair) and
+                  and send a message. Use Channels to pair, or enter the group chat id and
                   your own user id as the admin.
                 </p>
+                <Link to="/channels" className="text-sm underline sm:col-span-2">Open guided channel setup and pairing</Link>
                 <Field label="bot token">
                   <input
                     className={inputClass}
@@ -369,7 +416,7 @@ export default function OnboardingPage() {
                   Give your companion long-term memory of people and conversations. Setup prepares Docker,
                   Honcho and the bundled multilingual embedding model. No embedding API key is needed.
                 </p>
-                <MemoryReasoningSelector />
+                <MemoryReasoningSelector key={modelRevision} />
                 <Link to="/memory" className="block text-xs underline">Dialectic turns, recall budget and full Honcho status</Link>
                 <Button size="sm" onClick={startHoncho} disabled={busy === "honcho"}>
                   {busy === "honcho" ? <Spinner className="mr-1 h-3.5 w-3.5" /> : null}
@@ -466,6 +513,31 @@ export default function OnboardingPage() {
         </Card>
       ))}
 
+      <div className="flex items-center justify-between gap-3">
+        <Button outlined disabled={busy !== null || currentIndex <= 0} onClick={() => goTo(steps[currentIndex - 1].id)}>Back</Button>
+        {currentIndex < steps.length - 1 ? <Button disabled={busy !== null || !canContinue} onClick={() => goTo(steps[currentIndex + 1].id)}>Next</Button>
+          : <Link to="/chat" className="rounded border px-4 py-2 text-sm">Open Chat</Link>}
+      </div>
+      <details className="rounded border p-4">
+        <summary className="cursor-pointer text-sm font-medium">More setup options</summary>
+        <div className="grid gap-3 pt-3 text-sm sm:grid-cols-2">
+          <Link to="/config" className="underline">Terminal backend, agent limits and context compression</Link>
+          <Link to="/skills" className="underline">Tools, permissions and skills</Link>
+          <Link to="/channels" className="underline">Messaging platforms and pairing</Link>
+          <Link to="/character" className="underline">Character, voice and persona editor</Link>
+          <Link to="/models" className="underline">Models and auxiliary model assignments</Link>
+          <Link to="/env" className="underline">API keys and account connections</Link>
+        </div>
+      </details>
+      {modelPicker && <ModelPickerDialog loader={api.getModelOptions} alwaysGlobal title="Choose companion model"
+        onClose={() => setModelPicker(false)} onApply={async ({ provider, model, confirmExpensiveModel }) => {
+          const result = await api.setModelAssignment({ scope: "main", provider, model, confirm_expensive_model: confirmExpensiveModel });
+          if (result.confirm_required) return result;
+          setModelRevision(value => value + 1);
+          await refresh();
+          setModelPicker(false);
+          return result;
+        }} />}
       {percent === 100 && (
         <Card>
           <CardContent className="py-3 text-sm">

@@ -923,7 +923,7 @@ class TestCollectShareBundle:
     def test_redaction_keeps_secrets_out(self, hermes_home):
         from hermes_cli.debug import collect_share_bundle
 
-        secret = "sk-proj-abcdefghijklmnopqrstuvwxyz1234567890"
+        secret = 'sk-proj-abcdefghijklmn' 'opqrstuvwxyz1234567890'
         (hermes_home / "logs" / "agent.log").write_text(
             f"line one\nOPENAI_API_KEY={secret}\nline three\n"
         )

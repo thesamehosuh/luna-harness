@@ -10,6 +10,9 @@ use tauri::{Emitter, Manager};
 use tokio::{io::BufReader, process::{Child, Command}, sync::Mutex};
 #[path = "desktop_controls.rs"]
 mod controls;
+#[cfg(target_os = "linux")]
+#[path = "appimage_menu.rs"]
+mod appimage_menu;
 
 #[derive(Clone, Deserialize)]
 struct Download { url: String, sha256: String }
@@ -421,6 +424,10 @@ fn bootstrap_origin(url: &reqwest::Url) -> bool {
 }
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    if let Err(error) = appimage_menu::register_current() {
+        eprintln!("Luna could not add its application menu entry: {error}");
+    }
     let home = home().expect("Cannot locate Luna's data directory");
     fs::create_dir_all(&home).expect("Cannot create Luna's data directory");
     #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; fs::set_permissions(&home, fs::Permissions::from_mode(0o700)).expect("Cannot protect Luna's home"); }

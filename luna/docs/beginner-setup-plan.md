@@ -252,3 +252,16 @@ signing and clean-machine acceptance gates remain open in `desktop-release.md`.
 
 These references inform the plan; all runtime/image/model versions must be pinned and tested in
 the implementation. Development validation downloads model artifacts and uses disposable Docker projects. The operator's stopped legacy services and real homes remain untouched.
+
+## Guided setup update (2026-10-26)
+
+Setup presents one page at a time using the shared Luna theme, with keyboard-focused headings,
+Back/Next navigation, completion status and persistent optional skips. The account route embeds
+browser subscription login and the live model picker; ChatGPT users choose OpenAI Codex without
+an API key. Existing selected accounts count as configured. Advanced terminal, tool, channel,
+character and model settings remain linked from Setup.
+
+Honcho can follow the companion connection/model while using an independent reasoning effort.
+The effort survives model changes and profile export/import. Provider default is the fresh-user
+default; native OpenCode exposes only that setting and rejects unsupported overrides explicitly.
+Codex subscriptions map selected effort through the engine's model-supported vocabulary.
