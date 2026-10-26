@@ -395,3 +395,6 @@ Security and guided setup (2026-10-26):
   in the root README and desktop-release guide.
 - `web/vite.config.ts` initializes the optional compiler filter under the patched Vite
   types. The runtime bundle filter is unchanged.
+- `web/src/components/OAuthProvidersCard.tsx` defaults to browser-supported account flows,
+  with terminal instructions and token previews omitted from guided account setup.
+  Persona application in Setup targets the selected management profile.

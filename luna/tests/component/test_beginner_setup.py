@@ -302,8 +302,10 @@ def test_memory_effort_is_independent_and_reaches_transport(setup_home, monkeypa
     calls = []
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: (
         calls.append(kwargs) or SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="OK"))], usage=None)))))
-    monkeypatch.setattr(memory_reasoning.config_read, "section", lambda *path, **kw:
-        {"provider": provider, "default": "fixture-model"} if path == ("model",) else {"reasoning_effort": effort})
+    sections = {("model",): {"provider": provider, "default": "fixture-model"},
+                ("agent",): {"reasoning_effort": "low"},
+                ("luna", "memory_stack"): {"reasoning_effort": effort}}
+    monkeypatch.setattr(memory_reasoning.config_read, "section", lambda *path, **kw: sections.get(path, {}))
     monkeypatch.setattr(runtime_provider, "resolve_runtime_provider", lambda **kwargs: {"provider": provider})
     monkeypatch.setattr(auxiliary_client, "resolve_provider_client", lambda *args, **kwargs: (client, "fixture-model"))
     assert memory_reasoning.public_route()["reasoning_effort"] == effort

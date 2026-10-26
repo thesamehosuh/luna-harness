@@ -5,16 +5,16 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  report: vi.fn(), choice: vi.fn(), assign: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
+  soul: vi.fn(), report: vi.fn(), choice: vi.fn(), assign: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
 }));
 vi.mock("@/contexts/usePageHeader", () => ({ usePageHeader: () => ({ setEnd: mocks.setEnd }) }));
 vi.mock("@nous-research/ui/hooks/use-toast", () => ({ useToast: () => ({ showToast: mocks.showToast }) }));
 vi.mock("@nous-research/ui/ui/components/toast", () => ({ Toast: () => null }));
 vi.mock("@/lib/luna-onboarding", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/luna-onboarding")>(),
-  onboardingApi: { get: mocks.report, choice: mocks.choice, personas: async () => ({ personas: [] }) },
+  onboardingApi: { get: mocks.report, choice: mocks.choice, personas: async () => ({ personas: [{ id: "generic", name: "Companion", description: "A fixture", content: "# Fixture persona" }] }) },
 }));
-vi.mock("@/lib/api", () => ({ api: { setModelAssignment: mocks.assign, getModelOptions: vi.fn() } }));
+vi.mock("@/lib/api", () => ({ getManagementProfile: () => "test-profile", api: { updateProfileSoul: mocks.soul, setModelAssignment: mocks.assign, getModelOptions: vi.fn() } }));
 vi.mock("@/components/OpenCodeSetup", () => ({ default: () => <div>Free model setup</div> }));
 vi.mock("@/components/OAuthProvidersCard", () => ({ OAuthProvidersCard: () => <div>Browser account login</div> }));
 vi.mock("@/components/MemoryReasoningSelector", () => ({ MemoryReasoningSelector: () => <div>Independent memory model settings</div> }));
@@ -65,4 +65,10 @@ it("offers browser subscription login and assigns the live picker selection with
   await click("Apply test model");
   expect(mocks.assign).toHaveBeenCalledWith({ scope: "main", provider: "openai-codex", model: "subscription-fixture", confirm_expensive_model: true });
   expect(mocks.report).toHaveBeenCalledTimes(2);
+});
+
+it("applies the selected persona to the active profile", async () => {
+  await click("3. Character");
+  await click("Apply persona");
+  expect(mocks.soul).toHaveBeenCalledWith("test-profile", "# Fixture persona");
 });

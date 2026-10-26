@@ -11,7 +11,7 @@ import { Toast } from "@nous-research/ui/ui/components/toast";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { errorMessage } from "@/lib/api-error";
 import { lunaHomePath } from "@/lib/luna-paths";
-import { api } from "@/lib/api";
+import { api, getManagementProfile } from "@/lib/api";
 import OpenCodeSetup from "@/components/OpenCodeSetup";
 import { LunaMark } from "@/components/LunaMark";
 import { OAuthProvidersCard } from "@/components/OAuthProvidersCard";
@@ -208,7 +208,7 @@ export default function OnboardingPage() {
     if (!preset) return;
     setBusy("character");
     try {
-      await api.updateProfileSoul("default", preset.content);
+      await api.updateProfileSoul(getManagementProfile() || "default", preset.content);
       showToast("Persona applied", "success");
       await refresh();
     } catch (e) {
