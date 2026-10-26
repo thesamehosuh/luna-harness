@@ -170,3 +170,7 @@ and configuration writes are never replayed, and all assertions remain required.
 The release workflow uploads an attested **draft** after every platform passes.
 Publish that exact draft only after launching its packaged Linux installer on the
 acceptance machine; do not substitute a locally rebuilt archive or installer.
+
+Alpha 2 fixes memory reasoning through non-SDK provider adapters: per-call timeouts
+and normalized usage work with Codex/Anthropic wrappers. Enabled owned memory
+containers are started on dashboard launch even when the bridge URL is unchanged.

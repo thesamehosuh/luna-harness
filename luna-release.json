@@ -1,6 +1,6 @@
 {
   "product": "Luna",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "engine": {
     "name": "hermes-agent",
     "version": "0.21.3",

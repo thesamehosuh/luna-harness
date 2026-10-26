@@ -159,3 +159,44 @@ def test_skipped_memory_check_does_not_contact_any_server(setup_home, monkeypatc
     from luna_core import readiness, honcho
     monkeypatch.setattr(honcho.HonchoStore, "client", lambda *a: pytest.fail("Skipped memory contacted a server"))
     assert readiness.verify_memory()["ok"] is False
+
+
+def test_memory_reasoning_accepts_codex_adapter_protocol(setup_home, monkeypatch):
+    from luna_core import memory_reasoning
+    from hermes_cli import runtime_provider
+    from agent import auxiliary_client
+    calls = []
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true}'))],
+                               usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3, total_tokens=10))
+    # Codex/Anthropic adapters expose completions, but not OpenAI.with_options.
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(memory_reasoning, "route", lambda: {
+        "provider": "openai-codex", "source": "companion", "model": "fixture-subscription", "base_url": "", "key_env": ""})
+    monkeypatch.setattr(runtime_provider, "resolve_runtime_provider", lambda **kwargs: {"provider": "openai-codex"})
+    monkeypatch.setattr(auxiliary_client, "resolve_provider_client", lambda *args, **kwargs: (client, "fixture-subscription"))
+    result = memory_reasoning.complete({"messages": [{"role": "user", "content": "Synthetic evidence"}], "max_tokens": 32})
+    assert result["usage"] == {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10}
+    assert result["choices"][0]["message"]["content"] == '{"ok":true}'
+    assert calls[0]["timeout"] == 180 and calls[0]["max_tokens"] == 32
+    assert "tools" not in calls[0]
+
+
+def test_memory_restore_starts_containers_when_bridge_port_is_unchanged(setup_home, monkeypatch):
+    from luna_core import managed_memory, memory_worker, config_read, data_ops, memory_network
+    from luna_cli import onboarding
+    stack = setup_home / "honcho"; stack.mkdir()
+    (stack / ".embedding-contract.json").write_text("{}")
+    (stack / ".env").write_text("DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL=http://127.0.0.1:34567/v1\n")
+    monkeypatch.setattr(config_read, "section", lambda *args, **kwargs: "enabled")
+    monkeypatch.setattr(managed_memory, "_contract", lambda path: None)
+    monkeypatch.setattr(memory_worker, "ensure", lambda: {"port": 34567})
+    monkeypatch.setattr(memory_network, "worker_url", lambda port: f"http://127.0.0.1:{port}/v1")
+    monkeypatch.setattr(onboarding, "_seed_honcho_env", lambda *args, **kwargs: pytest.fail("Unchanged route must not rewrite credentials"))
+    monkeypatch.setattr(data_ops, "compose_command", lambda *args: ["owned-memory-up"])
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: (calls.append(args[0]) or SimpleNamespace(returncode=0)))
+    managed_memory._restores.clear()
+    managed_memory.restore()
+    assert calls == [["owned-memory-up"]]

@@ -1,6 +1,8 @@
-# Luna 0.1.0-alpha.1
+# Luna 0.1.0-alpha.2
 
-First public alpha of Luna, a self-hosted harness for your own AI companion.
+Fixes memory reasoning with Codex and Anthropic subscription adapters, and restores enabled
+memory containers on launch even when the local worker keeps its previous port. Existing
+characters, connections and memory data are preserved.
 
 ## Install
 

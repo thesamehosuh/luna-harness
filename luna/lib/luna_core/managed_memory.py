@@ -62,8 +62,8 @@ def restore():
         wanted = worker_url(worker["port"])
         if values.get("DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL") != wanted:
             _seed_honcho_env(stack, refresh=True, worker=worker)
-            proc = subprocess.run(compose_command(stack, "up", "-d", "api", "deriver"), capture_output=True, timeout=120)
-            if proc.returncode: raise RuntimeError("Memory containers need repair in Setup")
+        proc = subprocess.run(compose_command(stack, "up", "-d", "api", "deriver"), capture_output=True, timeout=120)
+        if proc.returncode: raise RuntimeError("Memory containers need repair in Setup")
     except Exception:
         _progress("degraded", "The saved memory worker needs attention. Open Memory → Setup and repair.")
 
