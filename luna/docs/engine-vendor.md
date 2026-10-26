@@ -444,4 +444,5 @@ Persona template changes apply to new installs or explicit preset selection. Per
 cache signatures, transport identity and wake thresholds remain unchanged.
 - `scripts/verify_dashboard_chat.py`: the real bundled-chat acceptance fixture supplies its own
   skin/input-prompt marker for keyboard readiness. It no longer waits for the decorative CLI
-  banner removed from embedded chat. Persona/runtime/PEOPLE context and response assertions remain.
+  banner removed from embedded chat. Product imports also occur after binding the disposable home.
+  Persona/runtime/PEOPLE context and response assertions remain.

@@ -58,9 +58,6 @@ class Provider(BaseHTTPRequestHandler):
 
 def verify(home=None, *, people_check=False):
     import yaml
-    from hermes_cli.pty_bridge import PtyBridge
-    from hermes_cli.web_server_chat import _resolve_chat_argv
-    from hermes_cli import config
     server = ThreadingHTTPServer(('127.0.0.1', 0), Provider)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     Provider.requests = []
@@ -70,6 +67,9 @@ def verify(home=None, *, people_check=False):
         target = Path(home) if home else Path(temporary)
         target.mkdir(parents=True, exist_ok=True)
         os.environ.update(HERMES_HOME=str(target), LUNA_HOME=str(target), HERMES_PYTHON='/usr/bin/python3', HERMES_PYTHON_SRC_ROOT='/tmp', HERMES_TUI_DIR='/tmp', HERMES_SKIP_NODE_BOOTSTRAP='1')
+        # Product imports may seed a home; bind the disposable home first.
+        from hermes_cli.pty_bridge import PtyBridge
+        from hermes_cli.web_server_chat import _resolve_chat_argv
         workspace = target / 'workspace';workspace.mkdir(exist_ok=True)
         data = {'model': {'provider':'custom','default':'dashboard-fixture','base_url':f'http://127.0.0.1:{server.server_port}/v1','api_key':'synthetic-fixture-key','api_mode':'chat_completions'}, 'luna': {'ambient': {'enabled': False}}, 'memory': {'provider':'', 'memory_enabled':False, 'user_profile_enabled':False}, 'terminal': {'cwd':str(workspace)}, 'display': {'skin':'default'}, 'platform_toolsets': {'cli':[]}, 'fallback_providers':[], 'plugins': {'enabled':[]}}
         if people_check:
