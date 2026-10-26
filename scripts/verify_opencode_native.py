@@ -32,6 +32,7 @@ def verify(root: Path, *, model: str | None = None, use_native_login=False, inst
     fixture.write_text(marker + "\n")
     calls, failures = [], []
     endpoint = None
+    title_model = None
 
     class ModelHandler(BaseHTTPRequestHandler):
         def log_message(self, *_args):
@@ -44,13 +45,10 @@ def verify(root: Path, *, model: str | None = None, use_native_login=False, inst
                 tools = [tool["function"]["name"] for tool in body.get("tools", [])]
                 system = "\n".join(str(row.get("content", "")) for row in body["messages"]
                                    if row.get("role") in {"system", "developer"})
-                # Native title generation may inherit the conversation's policy. Recognize
-                # its explicit system instruction before classifying main inference;
-                # an empty main catalog must still fail the tool assertion below.
-                title_request = any(str(row.get("content", "")).startswith(
-                    "You name conversations so the user can find them later in a list of past sessions."
-                ) for row in body["messages"] if row.get("role") == "system")
-                if title_request or "Use only the Luna MCP tools supplied for this conversation." not in system:
+                # Give native title generation its own fixture model ID. Prompt text
+                # and placeholder catalogs can vary; the main tool assertion stays strict.
+                is_title = str(body.get("model", "")).rsplit("/", 1)[-1] == "luna-native-title-fixture-free"
+                if is_title or "Use only the Luna MCP tools supplied for this conversation." not in system:
                     delta, finish = {"role": "assistant", "content": "Native Luna tool test"}, "stop"
                 elif not any(row.get("role") == "tool" and marker in json.dumps(row) for row in body["messages"]):
                     if "luna_read_file" not in tools:
@@ -88,9 +86,13 @@ def verify(root: Path, *, model: str | None = None, use_native_login=False, inst
             "cost": [{"input": 0, "output": 0, "cache": {"read": 0, "write": 0}}],
             "limit": {"context": 200000, "output": 4096},
         }}}}}
+        import copy
+        models = config["providers"]["opencode"]["models"]
+        models["luna-native-title-fixture-free"] = copy.deepcopy(models["luna-native-fixture-free"])
+        title_model = "opencode/luna-native-title-fixture-free"
     else:
         config = {}
-    config.update(model=model, agents={"title": {"model": model}, "compaction": {"model": model}})
+    config.update(model=model, agents={"title": {"model": title_model or model}, "compaction": {"model": model}})
 
     def environment(path):
         env = isolated_environment(path)

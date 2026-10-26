@@ -7,6 +7,7 @@ import socket
 import subprocess
 import time
 import threading
+from functools import wraps
 
 _restores = {}
 _restore_lock = threading.Lock()
@@ -41,6 +42,20 @@ def _contract(stack):
     return path, wanted
 
 
+def _serialized_lifecycle(function):
+    @wraps(function)
+    def serialized(*args, **kwargs):
+        stack = home() / "honcho"
+        if not stack.is_dir():
+            return function(*args, **kwargs)
+        from hermes_cli._file_lock import acquire
+        with (stack / ".lifecycle.lock").open("a+") as lock:
+            acquire(lock)
+            return function(*args, **kwargs)
+    return serialized
+
+
+@_serialized_lifecycle
 def restore():
     """Restore an already-enabled owned worker after login/reboot, never install Docker."""
     from luna_core import config_read, memory_worker
@@ -62,12 +77,15 @@ def restore():
         wanted = worker_url(worker["port"])
         if values.get("DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL") != wanted:
             _seed_honcho_env(stack, refresh=True, worker=worker)
-            proc = subprocess.run(compose_command(stack, "up", "-d", "api", "deriver"), capture_output=True, timeout=120)
-            if proc.returncode: raise RuntimeError("Memory containers need repair in Setup")
+        proc = subprocess.run(compose_command(stack, "up", "-d", "api", "deriver"), capture_output=True, timeout=120)
+        if proc.returncode: raise RuntimeError("Memory containers need repair in Setup")
     except Exception:
+        with _restore_lock:
+            _restores.pop(key, None)
         _progress("degraded", "The saved memory worker needs attention. Open Memory → Setup and repair.")
 
 
+@_serialized_lifecycle
 def disable():
     """Stop only an enabled managed stack. A fresh skip performs no Docker operation."""
     stack = home() / "honcho"

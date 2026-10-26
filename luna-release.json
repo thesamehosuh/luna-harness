@@ -1,6 +1,6 @@
 {
   "product": "Luna",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "engine": {
     "name": "hermes-agent",
     "version": "0.21.3",
@@ -12,12 +12,13 @@
     "protocol": ">=2.0.30,<2.2.0"
   },
   "data": {
-    "luna_schema": 3,
+    "luna_schema": 4,
     "settings_journal": 1,
     "backup_format": 1,
     "supported_luna_schemas": [
       2,
-      3
+      3,
+      4
     ]
   },
   "supported_os": [

@@ -375,3 +375,7 @@ and `hermes_cli/product_runtime.py` child environments select UTF-8. Isolated `-
 checks also pass `-X utf8`, since isolation ignores Python environment settings. This keeps
 Unicode templates/personas independent of a Windows account's legacy code page. The native
 command test and real Windows archive installation cover this contract.
+
+- Alpha 2: `agent/auxiliary_client.py` forwards the caller timeout through the
+  Anthropic auxiliary adapter, including memory reasoning. Covered by the adapter
+  timeout regression in the companion setup component tests.
