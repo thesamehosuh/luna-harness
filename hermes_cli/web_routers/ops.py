@@ -247,6 +247,55 @@ async def set_webhook_enabled(name: str, body: WebhookEnabledToggle):
 # --- Gateway lifecycle: spawn the real `hermes gateway <verb>` so behaviour
 # matches the CLI exactly (status is surfaced by /api/status).
 
+def _gateway_service_status(profile: Optional[str] = None):
+    from hermes_cli.web_server_profiles import _profile_scope
+    from hermes_cli import gateway
+    with _profile_scope(profile):
+        backend = gateway._service_backend()
+        installed = gateway._installed_service_kind()
+        system = bool(installed == "systemd" and gateway._select_systemd_scope(False))
+        return {"supported": backend is not None and not gateway.is_termux(), "installed": installed is not None,
+                "kind": installed or backend, "scope": "system" if system else "user"}
+
+
+@router.get("/api/gateway/service")
+async def gateway_service_status(profile: Optional[str] = None):
+    return await asyncio.to_thread(_gateway_service_status, profile)
+
+
+async def _gateway_service_action(profile: Optional[str], action: str):
+    from hermes_cli.web_server_gateway import multiplexed_profile_refusal
+    refusal = await asyncio.to_thread(multiplexed_profile_refusal, profile, "start")
+    if refusal:
+        raise HTTPException(status_code=409, detail=refusal)
+    status = await asyncio.to_thread(_gateway_service_status, profile)
+    if not status["supported"] or status["scope"] == "system":
+        raise HTTPException(status_code=409, detail="This service is managed outside your user account.")
+    from hermes_cli.web_server_profiles import _profile_scope
+    def running():
+        from gateway.status import is_gateway_running
+        with _profile_scope(profile):
+            return is_gateway_running(cleanup_stale=False)
+    if action == "install" and await asyncio.to_thread(running):
+        raise HTTPException(status_code=409, detail="Stop the gateway before enabling its background service.")
+    argv = _gateway_subcommand(profile, action)
+    if action == "install":
+        argv += ["--start-now", "--start-on-login"]
+    name = f"gateway-service-{action}"
+    with http_failure("Failed to configure gateway service", 500, "Could not configure the background service"):
+        proc = _spawn_hermes_action(argv, name)
+    return {"ok": True, "name": name, "pid": proc.pid}
+
+
+@router.post("/api/gateway/service/install")
+async def install_gateway_service(profile: Optional[str] = None):
+    return await _gateway_service_action(profile, "install")
+
+
+@router.post("/api/gateway/service/uninstall")
+async def uninstall_gateway_service(profile: Optional[str] = None):
+    return await _gateway_service_action(profile, "uninstall")
+
 
 @router.post("/api/gateway/start")
 async def start_gateway(profile: Optional[str] = None):

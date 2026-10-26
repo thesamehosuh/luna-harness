@@ -976,6 +976,8 @@ export const api = {
     ),
 
   // Gateway / update actions
+  getGatewayService: () => fetchJSON<GatewayServiceStatus>("/api/gateway/service"),
+  setGatewayService: (action: "install" | "uninstall") => fetchJSON<ActionResponse>(`/api/gateway/service/${action}`, { method: "POST" }),
   restartGateway: () =>
     fetchJSON<ActionResponse>("/api/gateway/restart", { method: "POST" }),
   getGatewayMigratePlan: () =>
@@ -1907,6 +1909,13 @@ export interface PlatformStatus {
   error_message?: string;
   state: string;
   updated_at: string;
+}
+
+export interface GatewayServiceStatus {
+  supported: boolean;
+  installed: boolean;
+  kind: "systemd" | "launchd" | "windows" | null;
+  scope: "user" | "system";
 }
 
 export interface StatusResponse {

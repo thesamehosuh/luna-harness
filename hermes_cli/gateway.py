@@ -2053,7 +2053,8 @@ def _windows_gateway_breakaway_state() -> bool | None:
 # =============================================================================
 
 _SERVICE_BASE = "hermes-gateway"
-SERVICE_DESCRIPTION = "Hermes Agent Gateway - Messaging Platform Integration"
+from hermes_cli.product_runtime import enabled as _luna_service_product
+SERVICE_DESCRIPTION = "Luna Gateway - Chat connections" if _luna_service_product() else "Hermes Agent Gateway - Messaging Platform Integration"
 
 _SYSTEM_UNIT_DIR = Path("/etc/systemd/system")
 
@@ -3011,9 +3012,9 @@ def _append_node_dir_for_service(path_entries: list[str], hermes_root: Path | No
 
 def _service_venv_dir() -> str:
     """VIRTUAL_ENV baked into service definitions: detected venv, else ``PROJECT_ROOT/venv``."""
-    from hermes_cli.product_runtime import enabled, installation_home
+    from hermes_cli.product_runtime import enabled, executable
     if enabled():
-        return str(installation_home(get_hermes_home()) / "venv")
+        return str(Path(executable(get_hermes_home())).parent.parent)
     detected_venv = _detect_venv_dir()
     return str(detected_venv) if detected_venv else str(PROJECT_ROOT / "venv")
 
@@ -6482,6 +6483,19 @@ def _cmd_start(args):
             print(f"✓ Killed {killed} stale gateway process(es) across all profiles")
             _wait_for_gateway_exit(timeout=10.0, force_after=5.0)
             _wait_for_api_server_port_free()
+
+    # The portable Luna desktop installation deliberately has no OS service.
+    # Its dashboard already detaches this child; use the existing foreground
+    # gateway instead of asking systemd/launchd to start a nonexistent unit.
+    from hermes_cli.product_runtime import enabled as luna_enabled
+    if luna_enabled() and not system and not is_windows() and _installed_service_kind() is None:
+        # Keep the canonical runtime argv: status/stop/orphan guards deliberately
+        # distinguish a real `gateway run` from a transient service `start` CLI.
+        command = [part for part in _gateway_run_args_for_profile(_current_profile_name()) if part != "--replace"]
+        if getattr(args, "force", False):
+            command.append("--force")
+        os.execv(command[0], command)
+        return
 
     if is_termux():
         _no_backend_exit("start", "termux")

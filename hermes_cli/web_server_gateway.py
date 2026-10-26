@@ -262,6 +262,8 @@ _ACTION_LOG_FILES: Dict[str, str] = {
     "gateway-restart": "gateway-restart.log",
     "gateway-start": "gateway-start.log",
     "gateway-stop": "gateway-stop.log",
+    "gateway-service-install": "gateway-service-install.log",
+    "gateway-service-uninstall": "gateway-service-uninstall.log",
     "gateway-migrate": "gateway-migrate.log",
     "hermes-update": "hermes-update.log",
     **{name: f"action-{name}.log" for name in (
@@ -485,8 +487,10 @@ def _spawn_hermes_action(
     # dashboard profile's credentials; see _profile_action_environment (also drops _HERMES_GATEWAY).
     action_env = _profile_action_environment(subcommand, env_overrides)
     detach = {"creationflags": windows_detach_flags()} if sys.platform == "win32" else {"start_new_session": True}
+    from hermes_cli.product_runtime import enabled, code_root
+    action_root = code_root(action_env.get("HERMES_HOME") or get_hermes_home()) if enabled() else PROJECT_ROOT
     proc = subprocess.Popen(
-        cmd, cwd=str(PROJECT_ROOT), stdin=subprocess.DEVNULL, stdout=log_file, stderr=subprocess.STDOUT,
+        cmd, cwd=str(action_root), stdin=subprocess.DEVNULL, stdout=log_file, stderr=subprocess.STDOUT,
         env=action_env, **detach,
     )
     log_file.close()  # child holds its own dup'd fd; keeping ours leaks one per action

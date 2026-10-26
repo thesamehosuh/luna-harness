@@ -351,11 +351,11 @@ def _gateway_command_subcommand(command: str | None) -> str | None:
     # Gateway-dedicated entrypoints carry no subcommand to inspect.
     if any(t == "gateway/run.py" or t.endswith("/gateway/run.py") for t in tokens):
         return "run"
-    if any(b in ("hermes-gateway", "hermes-gateway.exe") for b in basenames):
+    if any(b in ("hermes-gateway", "hermes-gateway.exe", "luna-gateway", "luna-gateway.exe") for b in basenames):
         return "run"
-    joined = " ".join(tokens)
-    if "hermes_cli.main" not in joined and "hermes_cli/main.py" not in joined and not any(
-        b in ("hermes", "hermes.exe") for b in basenames
+    if not any(t in {"hermes_cli.main", "luna_cli.main"} or t.endswith(("/hermes_cli/main.py", "/luna_cli/main.py"))
+               or t in {"hermes_cli/main.py", "luna_cli/main.py"} for t in tokens) and not any(
+        b in ("hermes", "hermes.exe", "luna", "luna.exe") for b in basenames
     ):
         return None
     # Drop --profile X / -p X / --profile=X / -p=X (consumes a VALUE of "gateway" too).

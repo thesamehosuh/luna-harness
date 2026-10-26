@@ -1,3 +1,10 @@
+# Luna 0.1.0-alpha.6
+
+- Start gateway works in desktop installations without an OS service.
+- Control Center can enable/start or remove an optional background service.
+- Gateway actions follow the selected runtime immediately after an update.
+- Existing service installations retain their service manager; no extra service is installed.
+
 # Luna 0.1.0-alpha.5
 
 Onboarding and gateway hotfix.

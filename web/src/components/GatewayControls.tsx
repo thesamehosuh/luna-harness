@@ -1,22 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Play, RotateCw, Square } from "lucide-react";
+import { Play, RotateCw, Server, Square } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { api, type StatusResponse } from "@/lib/api";
+import { api, type StatusResponse, type GatewayServiceStatus } from "@/lib/api";
 import { errorMessage } from "@/lib/api-error";
-import { runGatewayAction, type GatewayAction } from "@/lib/gateway-lifecycle";
+import { runGatewayAction, runGatewayServiceAction, type GatewayAction } from "@/lib/gateway-lifecycle";
 import { sharedGatewayProfiles } from "@/lib/shared-gateway";
 
 export function GatewayControls() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [busy, setBusy] = useState<GatewayAction | null>(null);
+  const [busy, setBusy] = useState<GatewayAction | "install" | "uninstall" | null>(null);
+  const [service, setService] = useState<GatewayServiceStatus | null>(null);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [confirm, setConfirm] = useState(false);
   useEffect(() => {
     let active = true;
-    const load = () => api.getStatus().then(value => { if (active) { setStatus(value); setLoadError(""); } }).catch(reason => { if (active) setLoadError(errorMessage(reason)); });
+    const load = () => Promise.all([api.getStatus(), api.getGatewayService()]).then(([value, info]) => { if (active) { setStatus(value); setService(info); setLoadError(""); } }).catch(reason => { if (active) setLoadError(errorMessage(reason)); });
     void load();
     const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 3000);
     return () => { active = false; window.clearInterval(timer); };
@@ -28,6 +29,12 @@ export function GatewayControls() {
     finally { setBusy(null); }
   };
   const shared = sharedGatewayProfiles(status);
+  const changeService = async (action: "install" | "uninstall") => {
+    setBusy(action); setError("");
+    try { const result = await runGatewayServiceAction(action); setService(result.service); setStatus(result.status); }
+    catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(null); }
+  };
   const running = status?.gateway_running === true;
   const connected = Object.values(status?.gateway_platforms || {}).filter(platform => platform.state === "connected").length;
   return <section aria-label="Gateway controls" className="rounded-panel border border-border bg-card px-5 py-4">
@@ -41,6 +48,12 @@ export function GatewayControls() {
           : <Button size="sm" disabled={busy !== null || !status} prefix={<Play />} onClick={() => void run("start")}>{busy === "start" ? "Starting…" : "Start gateway"}</Button>}
       </div>
     </div>
+    {service?.supported && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+      <div><p className="flex items-center gap-2 text-xs font-medium"><Server className="size-3.5" />Background service <span className="font-normal text-muted-foreground">{service.installed ? "Enabled" : "Off"}</span></p><p className="mt-1 text-xs text-muted-foreground">Keeps running after Luna closes. Starts at sign-in.</p></div>
+      <Button outlined size="sm" disabled={busy !== null || !!shared || service.scope === "system"} onClick={() => void changeService(service.installed ? "uninstall" : "install")}>
+        {busy === "install" ? "Enabling…" : busy === "uninstall" ? "Removing…" : service.installed ? "Remove service & stop" : "Enable service"}
+      </Button>
+    </div>}
     {(error || loadError) && <p role="alert" className="mt-3 text-sm text-destructive">{error || loadError}</p>}
     <ConfirmDialog open={confirm} title="Restart shared gateway?" description={`This reconnects ${shared?.length || 0} bots on this device.`} confirmLabel="Restart" onCancel={() => setConfirm(false)} onConfirm={() => { setConfirm(false); void run("restart"); }} />
   </section>;

@@ -468,3 +468,28 @@ cache signatures, transport identity and wake thresholds remain unchanged.
 Focused validation: current live account catalog (IDs only), Codex catalog regressions,
 Telegram onboarding save/connect, dropdown persistence, foreground restart completion,
 stalled-request timeout, TypeScript and production dashboard/TUI builds.
+
+2026-10-26 portable gateway start correction:
+- `hermes_cli/gateway.py`: Luna start uses the existing foreground gateway when
+  no Linux/macOS service is installed. The dashboard already detaches the child.
+  Installed services, explicit system-service requests and Windows behavior are
+  retained. Covered by `tests/hermes_cli/test_luna_gateway_start.py`.
+- `hermes_cli/web_server_gateway.py`: dashboard action children run from the
+  selected runtime directory, preventing Python's current-directory precedence
+  from loading code from a prior release after an update. Service actions use
+  the existing scoped action runner and logs.
+- `hermes_cli/gateway.py`: generated service virtualenv paths resolve the selected
+  desktop runtime; the OS description identifies Luna.
+- `hermes_cli/web_routers/ops.py`, `web/src/{components/GatewayControls.tsx,lib/api.ts,lib/gateway-lifecycle.ts}`:
+  explicit user-account background-service install/start-at-login and removal
+  controls. Setup stops the direct gateway first, verifies the installed service
+  and running gateway, and bounds the operation. System-managed services and
+  multiplexed foreign profiles are refused before mutation. No service is installed
+  by default. Removal stops the service; direct Start remains available.
+- Focused regressions cover service auth, refusal/ownership boundaries, service
+  command flags, selected-runtime action cwd, and finite service-setup UI states.
+
+- `gateway/status.py`: recognize exact Luna module/script/binary entrypoints in
+  the existing gateway process identity checks. Direct Start execs the canonical
+  run command so liveness, stop, restart and the one-poller lock agree. Non-gateway
+  commands and unrelated Python command strings remain excluded.
