@@ -61,3 +61,6 @@ Final regression totals (2026-10-26): 572 dashboard tests; 830 Luna tests with 2
 147 engine gateway contract tests; 31 native launcher tests with 1 pre-existing release-fixture skip.
 Web and launcher builds, TypeScript checks, native Rust build and lint complete (zero lint errors).
 The installed app/data reset is operator-specific and is not part of the product runtime.
+The real bundled TUI inference checks also pass against a local provider fixture, including persona
+and Luna runtime instructions, rendered replies, and the model-writable PEOPLE.md path. The fixture
+uses a dedicated input-prompt marker rather than depending on startup banner copy.
