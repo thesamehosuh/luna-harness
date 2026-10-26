@@ -1782,6 +1782,8 @@ class _AnthropicCompletionsAdapter:
                 if not isinstance(existing, dict):
                     existing = {}
                 anthropic_kwargs["extra_body"] = {**existing, **passthrough}
+        if kwargs.get("timeout") is not None:
+            anthropic_kwargs["timeout"] = kwargs["timeout"]
         response = create_anthropic_message(
             self._client,
             anthropic_kwargs,

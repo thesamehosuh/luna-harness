@@ -161,7 +161,8 @@ def test_skipped_memory_check_does_not_contact_any_server(setup_home, monkeypatc
     assert readiness.verify_memory()["ok"] is False
 
 
-def test_memory_reasoning_accepts_codex_adapter_protocol(setup_home, monkeypatch):
+@pytest.mark.parametrize("sdk_client", [False, True])
+def test_memory_reasoning_accepts_provider_client_protocols(setup_home, monkeypatch, sdk_client):
     from luna_core import memory_reasoning
     from hermes_cli import runtime_provider
     from agent import auxiliary_client
@@ -172,6 +173,9 @@ def test_memory_reasoning_accepts_codex_adapter_protocol(setup_home, monkeypatch
                                usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3, total_tokens=10))
     # Codex/Anthropic adapters expose completions, but not OpenAI.with_options.
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    options = []
+    if sdk_client:
+        client.with_options = lambda **kwargs: (options.append(kwargs) or client)
     monkeypatch.setattr(memory_reasoning, "route", lambda: {
         "provider": "openai-codex", "source": "companion", "model": "fixture-subscription", "base_url": "", "key_env": ""})
     monkeypatch.setattr(runtime_provider, "resolve_runtime_provider", lambda **kwargs: {"provider": "openai-codex"})
@@ -180,6 +184,7 @@ def test_memory_reasoning_accepts_codex_adapter_protocol(setup_home, monkeypatch
     assert result["usage"] == {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10}
     assert result["choices"][0]["message"]["content"] == '{"ok":true}'
     assert calls[0]["timeout"] == 180 and calls[0]["max_tokens"] == 32
+    assert options == ([{"timeout": 180, "max_retries": 0}] if sdk_client else [])
     assert "tools" not in calls[0]
 
 
@@ -200,3 +205,70 @@ def test_memory_restore_starts_containers_when_bridge_port_is_unchanged(setup_ho
     managed_memory._restores.clear()
     managed_memory.restore()
     assert calls == [["owned-memory-up"]]
+
+
+def test_anthropic_auxiliary_adapter_forwards_memory_timeout(monkeypatch):
+    from agent import anthropic_adapter, transports
+    from agent.auxiliary_client import _AnthropicCompletionsAdapter
+    captured = {}
+    monkeypatch.setattr(anthropic_adapter, "build_anthropic_kwargs", lambda **kwargs: {"model": kwargs["model"]})
+    def send(client, kwargs, **options):
+        captured.update(kwargs)
+        return SimpleNamespace(usage=None)
+    monkeypatch.setattr(anthropic_adapter, "create_anthropic_message", send)
+    monkeypatch.setattr(transports, "get_transport", lambda name: SimpleNamespace(normalize_response=lambda response, **options:
+        SimpleNamespace(content="OK", tool_calls=None, reasoning=None, finish_reason="stop")))
+    client = _AnthropicCompletionsAdapter(SimpleNamespace(base_url="https://api.anthropic.com"), "fixture-model")
+    assert client.create(messages=[], timeout=180).choices[0].message.content == "OK"
+    assert captured["timeout"] == 180
+
+
+def test_failed_memory_restore_can_retry_immediately(setup_home, monkeypatch):
+    from luna_core import managed_memory, memory_worker, config_read, data_ops, memory_network
+    stack = setup_home / "honcho"; stack.mkdir()
+    (stack / ".embedding-contract.json").write_text("{}")
+    (stack / ".env").write_text("DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL=http://127.0.0.1:34567/v1\n")
+    monkeypatch.setattr(config_read, "section", lambda *args, **kwargs: "enabled")
+    monkeypatch.setattr(managed_memory, "_contract", lambda path: None)
+    monkeypatch.setattr(memory_worker, "ensure", lambda: {"port": 34567})
+    monkeypatch.setattr(memory_network, "worker_url", lambda port: f"http://127.0.0.1:{port}/v1")
+    monkeypatch.setattr(data_ops, "compose_command", lambda *args: ["owned-memory-up"])
+    calls = []
+    def run(*args, **kwargs):
+        calls.append(args[0])
+        return SimpleNamespace(returncode=1 if len(calls)==1 else 0)
+    monkeypatch.setattr(subprocess, "run", run)
+    managed_memory._restores.clear()
+    managed_memory.restore()
+    managed_memory.restore()
+    assert len(calls) == 2
+
+
+def test_memory_disable_waits_for_inflight_restore(setup_home, monkeypatch):
+    import threading
+    from luna_core import managed_memory, memory_worker, config_read, data_ops, memory_network
+    stack = setup_home / "honcho"; stack.mkdir()
+    (stack / ".embedding-contract.json").write_text("{}")
+    (stack / ".env").write_text("DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL=http://127.0.0.1:34567/v1\n")
+    enabled = ["enabled"]; started=threading.Event(); proceed=threading.Event(); disabled=threading.Event(); calls=[]
+    monkeypatch.setattr(config_read, "section", lambda *args, **kwargs: enabled[0])
+    monkeypatch.setattr(managed_memory, "_contract", lambda path: None)
+    def ensure():
+        started.set(); assert proceed.wait(5); return {"port":34567}
+    monkeypatch.setattr(memory_worker, "ensure", ensure)
+    monkeypatch.setattr(memory_worker, "stop", lambda: None)
+    monkeypatch.setattr(memory_network, "worker_url", lambda port: f"http://127.0.0.1:{port}/v1")
+    monkeypatch.setattr(data_ops, "compose_command", lambda stack, *args: list(args))
+    monkeypatch.setattr(subprocess, "run", lambda args, **kwargs: (calls.append(args[0]) or SimpleNamespace(returncode=0)))
+    def disable():
+        managed_memory.disable(); disabled.set()
+    managed_memory._restores.clear()
+    first=threading.Thread(target=managed_memory.restore); second=threading.Thread(target=disable)
+    first.start(); assert started.wait(5)
+    try:
+        enabled[0]="skipped"; second.start()
+        assert not disabled.wait(.1)
+    finally:
+        proceed.set(); first.join(5); second.join(5)
+    assert not first.is_alive() and not second.is_alive()
+    assert calls[-1] == "stop"
