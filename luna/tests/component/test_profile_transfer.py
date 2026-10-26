@@ -27,7 +27,7 @@ def bundle():
                 "dashboard": {"theme": "sakura-day"}, "display": {"skin": "nova"},
                 "luna": {"character": {"name": "Nova", "aliases": ["Nova"]},
                          "output": {"max_lines": 7, "allowed_emoji": ["🌱"], "sentence_breaks": False},
-                         "memory_stack": {"reasoning_source": "custom", "provider": "custom", "base_url": "https://reasoning.example/v1", "model": "memory-model", "api_key_env": "MEMORY_MODEL_KEY"},
+                         "memory_stack": {"reasoning_effort": "high", "reasoning_source": "custom", "provider": "custom", "base_url": "https://reasoning.example/v1", "model": "memory-model", "api_key_env": "MEMORY_MODEL_KEY"},
                          "ambient": {"enabled": True, "dry_run": False, "settle_seconds": 15}},
                 "honcho": {"dialecticCadence": 12, "contextTokens": 3000},
                 "skills": {"auto_load": ["not-installed"]}},

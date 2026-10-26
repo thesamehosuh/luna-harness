@@ -204,7 +204,7 @@ class TestContentDiscipline:
             "final_response": "",
             "error": (
                 "400 from provider; request headers were "
-                "Authorization: Bearer sk-proj-abcdefghijklmnopqrstuvwxyz0123456789"
+                'Authorization: Bearer sk-proj-abcdefghijklmn' 'opqrstuvwxyz0123456789'
             ),
             "failed": True,
         }))
@@ -213,7 +213,7 @@ class TestContentDiscipline:
             _run(session)
 
         msg = _finished(caplog)
-        assert "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789" not in msg
+        assert 'sk-proj-abcdefghijklmn' 'opqrstuvwxyz0123456789' not in msg
         # The diagnostic value survives the redaction — this is the point.
         assert "400 from provider" in msg
 

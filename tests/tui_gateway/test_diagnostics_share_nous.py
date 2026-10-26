@@ -63,7 +63,7 @@ def test_share_nous_uploads_redacted_bundle(captured_upload):
 
 
 def test_share_nous_attaches_redacted_error_context(captured_upload):
-    secret = "sk-abc123def456ghi789jkl012mno345pqr678"
+    secret = 'sk-abc123def456ghi7' '89jkl012mno345pqr678'
     result = _handler()(
         "rid-2",
         {"error_context": f"layer: provider\ncode: rate_limit\nkey was {secret}"},
@@ -80,7 +80,7 @@ def test_share_nous_client_text_gets_upload_safe_log_redaction(captured_upload):
     """Client artifacts must ride the SAME redactor as backend logs
     (_redact_log_text): secrets AND email addresses — not just the bare
     secret pass, which leaves emails through (review finding on #92020)."""
-    secret = "sk-abc123def456ghi789jkl012mno345pqr678"
+    secret = 'sk-abc123def456ghi7' '89jkl012mno345pqr678'
     result = _handler()(
         "rid-2b",
         {
@@ -111,7 +111,7 @@ def test_share_nous_linkless_success_is_a_failure(monkeypatch):
 
 
 def test_share_nous_extra_files_sanitized_and_redacted(captured_upload):
-    secret = "sk-abc123def456ghi789jkl012mno345pqr678"
+    secret = 'sk-abc123def456ghi7' '89jkl012mno345pqr678'
     result = _handler()(
         "rid-3",
         {

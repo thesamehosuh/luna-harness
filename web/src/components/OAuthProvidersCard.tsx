@@ -24,6 +24,7 @@ import { useI18n } from "@/i18n";
 import { errorMessage } from "@/lib/api-error";
 
 interface Props {
+  guided?: boolean;
   onError?: (msg: string) => void;
   onSuccess?: (msg: string) => void;
 }
@@ -50,7 +51,7 @@ function formatExpiresAt(
   }
 }
 
-export function OAuthProvidersCard({ onError, onSuccess }: Props) {
+export function OAuthProvidersCard({ onError, onSuccess, guided = true }: Props) {
   const [providers, setProviders] = useState<OAuthProvider[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -89,9 +90,10 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
     }
   };
 
-  const connectedCount =
-    providers?.filter((p) => p.status.logged_in).length ?? 0;
-  const totalCount = providers?.length ?? 0;
+  const visibleProviders = providers?.filter(provider => !guided || provider.flow !== "external")
+    .sort((a, b) => guided ? Number(b.id === "openai-codex") - Number(a.id === "openai-codex") : 0);
+  const connectedCount = visibleProviders?.filter(p => p.status.logged_in).length ?? 0;
+  const totalCount = visibleProviders?.length ?? 0;
 
   return (
     <Card>
@@ -100,7 +102,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-muted-foreground" />
             <CardTitle className="text-base">
-              {t.oauth.providerLogins}
+              {guided ? "Sign in to your account" : t.oauth.providerLogins}
             </CardTitle>
           </div>
           <Button
@@ -115,7 +117,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
           </Button>
         </div>
         <CardDescription>
-          {t.oauth.description
+          {guided ? "Sign in in your browser, then choose a model. Your account’s usage limits apply." : t.oauth.description
             .replace("{connected}", String(connectedCount))
             .replace("{total}", String(totalCount))}
         </CardDescription>
@@ -126,13 +128,13 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
             <Spinner className="text-xl text-primary" />
           </div>
         )}
-        {providers && providers.length === 0 && (
+        {visibleProviders && visibleProviders.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-8">
             {t.oauth.noProviders}
           </p>
         )}
         <div className="flex flex-col divide-y divide-border">
-          {providers?.map((p) => {
+          {visibleProviders?.map((p) => {
             const expiresLabel = formatExpiresAt(
               p.status.expires_at,
               t.oauth.expiresIn,
@@ -151,7 +153,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
                   )}
                   <div className="flex flex-col min-w-0 gap-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{p.name}</span>
+                      <span className="font-medium text-sm">{guided && p.id === "openai-codex" ? "ChatGPT (OpenAI Codex)" : p.name}</span>
                       <Badge
                         tone="outline"
                         className="text-xs tracking-wide"
@@ -174,7 +176,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
                         </Badge>
                       )}
                     </div>
-                    {p.status.logged_in && p.status.token_preview && (
+                    {!guided && p.status.logged_in && p.status.token_preview && (
                       <span className="truncate text-xs font-mono-ui text-text-secondary">
                         <span className="text-text-tertiary">token </span>
                         {p.status.token_preview}
@@ -189,11 +191,11 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
                     {!p.status.logged_in && (
                       <>
                         <span className="text-xs text-text-secondary">
-                          {t.oauth.notConnected.split("{command}")[0].trimEnd()}
-                          {t.oauth.notConnected.split("{command}")[1] ?? ""}
+                          {guided ? "Sign in to connect this account." : t.oauth.notConnected.split("{command}")[0].trimEnd()}
+                          {!guided && (t.oauth.notConnected.split("{command}")[1] ?? "")}
                         </span>
 
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        {!guided && <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <code className="font-courier truncate text-xs opacity-60">
                             {p.cli_command}
                           </code>
@@ -203,7 +205,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
                             label={t.oauth.cli}
                             copiedLabel={t.oauth.copied}
                           />
-                        </div>
+                        </div>}
                       </>
                     )}
                     {p.status.error && (
@@ -215,7 +217,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {p.docs_url && (
+                  {!guided && p.docs_url && (
                     <a
                       href={p.docs_url}
                       target="_blank"
@@ -231,7 +233,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
                   {!p.status.logged_in && p.flow !== "external" && (
                     <Button
                       size="sm"
-                      className="uppercase"
+                      className={guided ? undefined : "uppercase"}
                       onClick={() => setLoginFor(p)}
                     >
                       {t.oauth.login}
@@ -241,7 +243,7 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
                     <Button
                       size="sm"
                       outlined
-                      className="uppercase"
+                      className={guided ? undefined : "uppercase"}
                       onClick={() => setDisconnectTarget(p)}
                       disabled={isBusy}
                       prefix={isBusy ? <Spinner /> : undefined}

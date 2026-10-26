@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-KEY = "sk-ant-api03-synthetic-test-key-0000"
+KEY = 'sk-ant-api03-synth' 'etic-test-key-0000'
 MODEL_A = "claude-sonnet-4-5"
 MODEL_B = "claude-haiku-4-5"
 

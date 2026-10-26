@@ -1,0 +1,20 @@
+title = "Luna secrets gate"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "luna-telegram-token"
+description = "Telegram bot token"
+regex = '''\b[0-9]{5,16}:[A-Za-z0-9_-]{30,40}\b'''
+
+[[rules]]
+id = "luna-chatgpt-session"
+description = "JWT-shaped account credential"
+regex = '''\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}\b'''
+keywords = ["eyJ"]
+
+[[rules]]
+id = "luna-openai-key"
+description = "OpenAI-shaped API key"
+regex = '''\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}\b'''
+keywords = ["sk-"]

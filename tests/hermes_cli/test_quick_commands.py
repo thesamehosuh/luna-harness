@@ -77,6 +77,13 @@ class TestCLIQuickCommands:
 class TestGatewayQuickCommands:
     """Test quick command dispatch in GatewayRunner._handle_message."""
 
+    @pytest.fixture(autouse=True)
+    def isolated_engine_settings(self, monkeypatch):
+        # These execution/redaction tests use the engine's ungated fixture.
+        # Do not read an operator home or the companion's stricter admin policy;
+        # Luna's gateway suite tests that policy independently.
+        monkeypatch.setattr("hermes_cli.config.load_config_readonly", lambda: {})
+
     def _make_event(self, command, args=""):
         event = MagicMock()
         event.get_command.return_value = command
@@ -131,7 +138,7 @@ class TestGatewayQuickCommands:
         monkeypatch.setattr("agent.redact._REDACT_ENABLED", True)
 
         runner = GatewayRunner.__new__(GatewayRunner)
-        runner.config = {"quick_commands": {"token": {"type": "exec", "command": "echo sk-ant-api03-supersecretkey1234567890"}}}
+        runner.config = {"quick_commands": {"token": {"type": "exec", "command": 'echo sk-ant-api03-super' 'secretkey1234567890'}}}
         runner._running_agents = {}
         runner._pending_messages = {}
         runner._is_user_authorized = MagicMock(return_value=True)

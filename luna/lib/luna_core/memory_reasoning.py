@@ -17,7 +17,10 @@ def route():
         raise ValueError("Choose a companion model, or choose a memory model in Setup")
     if provider == "auto":
         raise ValueError("Memory needs an explicit configured model connection; choose one in Setup")
-    return {"source": source, "provider": provider, "model": name,
+    effort = str(memory.get("reasoning_effort") or "default").lower()
+    if effort not in {"default", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}:
+        raise ValueError("Choose a valid memory reasoning effort in Setup")
+    return {"reasoning_effort": effort, "source": source, "provider": provider, "model": name,
             "base_url": str(selected.get("base_url") or ""),
             "key_env": str(selected.get("api_key_env") or selected.get("key_env") or "")}
 
@@ -25,7 +28,7 @@ def route():
 def public_route():
     try:
         selected = route()
-        return {"configured": True, **{k: selected[k] for k in ("source", "provider", "model")}}
+        return {"configured": True, **{k: selected[k] for k in ("source", "provider", "model", "reasoning_effort")}}
     except ValueError as exc:
         return {"configured": False, "source": "companion", "detail": str(exc)}
 
@@ -67,6 +70,9 @@ def complete(body):
     selected = route()  # Resolve each call; never copy a persona route into Honcho's config.
     schema = _schema(body.get("response_format"))
     native = selected["provider"] == "opencode-engine"
+    effort = selected.get("reasoning_effort", "default")
+    if native and effort != "default":
+        raise ValueError("Native OpenCode does not expose reasoning effort; choose provider default or another memory connection")
     if native:
         from luna_core.opencode_aux import OpenCodeAuxClient
         client = OpenCodeAuxClient(selected["model"]).with_options(timeout=180)
@@ -98,6 +104,17 @@ def complete(body):
                 kwargs["response_format"] = body["response_format"]
             if not native and body.get("max_tokens"):
                 kwargs["max_tokens"] = min(8192, max(1, int(body["max_tokens"])))
+            if effort != "default":
+                if client.__class__.__name__ == "BedrockAuxiliaryClient":
+                    raise ValueError("This memory connection does not expose reasoning effort; choose provider default")
+                from hermes_constants import parse_reasoning_effort
+                reasoning = parse_reasoning_effort(effort)
+                # Subscription/Anthropic adapters translate the shared reasoning config.
+                # Ordinary Chat Completions endpoints accept reasoning_effort directly.
+                if client.__class__.__name__ in {"CodexAuxiliaryClient", "AnthropicAuxiliaryClient"} or selected["provider"] in {"openai-codex", "anthropic"}:
+                    kwargs["extra_body"] = {"reasoning": reasoning}
+                else:
+                    kwargs["reasoning_effort"] = effort
             response = client.chat.completions.create(**kwargs)
             content = response.choices[0].message.content or ""
             if len(content.encode()) > 256_000:

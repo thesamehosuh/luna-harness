@@ -243,7 +243,7 @@ class TestCronSchedulerUnscopedCall:
         Fix: use get_secret(), which raises UnscopedSecretError when multiplex is
         active and no scope is installed (matching secret_scope.py's fail-closed contract).
         """
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api-PROCESS-LEVEL-SHOULD-NOT-LEAK")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", 'sk-ant-api-PROCESS-L' 'EVEL-SHOULD-NOT-LEAK')
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
 

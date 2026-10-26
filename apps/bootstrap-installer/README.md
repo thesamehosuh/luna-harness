@@ -27,3 +27,8 @@ provenance. Publisher certificates are still required for trusted macOS/Windows 
 checksums and build provenance do not replace OS signing.
 
 See [desktop release ownership and checks](../../luna/docs/desktop-release.md).
+
+On Linux, Debian/RPM installers register the application normally. The portable AppImage
+registers **Luna Harness** in the user's application menu on its first launch and keeps a
+launcher copy under the user's data directory, so moving the original download does not break
+the menu entry. It does not enable login startup or start the companion.

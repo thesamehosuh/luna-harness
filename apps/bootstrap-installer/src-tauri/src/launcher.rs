@@ -10,6 +10,9 @@ use tauri::{Emitter, Manager};
 use tokio::{io::BufReader, process::{Child, Command}, sync::Mutex};
 #[path = "desktop_controls.rs"]
 mod controls;
+#[cfg(target_os = "linux")]
+#[path = "appimage_menu.rs"]
+mod appimage_menu;
 
 #[derive(Clone, Deserialize)]
 struct Download { url: String, sha256: String }
@@ -314,6 +317,13 @@ async fn start(app: tauri::AppHandle, state: &State, repair: bool) -> Result<()>
                     if url.origin() == origin { return true }
                     if matches!(url.scheme(), "https" | "http") { let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>); }
                     false
+                })
+                .on_new_window(|url, _| {
+                    // OAuth uses window.open; keep login in the system browser.
+                    if matches!(url.scheme(), "https" | "http") {
+                        let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>);
+                    }
+                    tauri::webview::NewWindowResponse::Deny
                 }).build();
             match window {
                 Ok(window) => {
@@ -421,6 +431,10 @@ fn bootstrap_origin(url: &reqwest::Url) -> bool {
 }
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    if let Err(error) = appimage_menu::register_current() {
+        eprintln!("Luna could not add its application menu entry: {error}");
+    }
     let home = home().expect("Cannot locate Luna's data directory");
     fs::create_dir_all(&home).expect("Cannot create Luna's data directory");
     #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; fs::set_permissions(&home, fs::Permissions::from_mode(0o700)).expect("Cannot protect Luna's home"); }

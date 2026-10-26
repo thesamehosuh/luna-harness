@@ -131,14 +131,23 @@ def check_provider() -> Dict[str, Any]:
     keys = {key_env: _secret(key_env)} if not _placeholder(_secret(key_env)) else {}
     loopback = urlparse(base_url).hostname in {"127.0.0.1", "localhost", "::1"}
     configured = bool(model_name)
-    keyed = bool(keys) or loopback
+    account_connected = False
+    if provider:
+        try:
+            from hermes_cli import auth
+            status = auth.get_nous_auth_status_local() if provider == "nous" else auth.get_auth_status(provider)
+            account_connected = bool(status.get("logged_in"))
+        except Exception:
+            # Listing setup status must remain usable when an optional auth backend is unavailable.
+            pass
+    keyed = bool(keys) or loopback or account_connected
     detail = (f"model={model_name or 'unset'}" + (f" @ {base_url}" if base_url else "")
-              + (f"; {key_env} present" if keys else "; local endpoint" if loopback else f"; {key_env} missing"))
+              + (f"; {key_env} present" if keys else "; account connected" if account_connected else "; local endpoint" if loopback else f"; {key_env} missing"))
     from luna_core.readiness import get
     verification = get("chat")
-    verified = bool(verification and verification["ok"] and verification.get("checks", {}).get("model") == model_name)
-    return _status(verified, detail, configured=configured and keyed, readiness="verified" if verified else "configured" if configured and keyed else "missing", verification=verification, provider=provider, base_url=base_url,
-                   key_present=keyed, keys_found=sorted(keys))
+    verified = bool(configured and keyed and verification and verification["ok"] and verification.get("checks", {}).get("model") == model_name)
+    return _status(verified, detail, configured=configured and keyed, readiness="verified" if verified else "configured" if configured and keyed else "missing", verification=verification, provider=provider, model=model_name, base_url=base_url, key_env=key_env,
+                   key_present=bool(keys), account_connected=account_connected, key_required=not (loopback or account_connected), keys_found=sorted(keys))
 
 
 def check_telegram() -> Dict[str, Any]:

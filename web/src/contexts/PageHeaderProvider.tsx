@@ -9,8 +9,10 @@ import { DASHBOARD_NAV, CHAT_NAV_ITEM, navGroupLabel } from "@/lib/navigation";
 export function PageHeaderProvider({
   children,
   pluginTabs,
+  hideHeader = false,
 }: {
   children: ReactNode;
+  hideHeader?: boolean;
   pluginTabs: { path: string; label: string }[];
 }) {
   const { pathname } = useLocation();
@@ -49,7 +51,7 @@ export function PageHeaderProvider({
   return (
     <PageHeaderContext.Provider value={value}>
       <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="z-1 w-full shrink-0 border-b border-border/60 bg-background-base px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+        {!hideHeader && <header className="z-1 w-full shrink-0 border-b border-border/60 bg-background-base px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
           <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               {routeGroup && !isChatRoute && (
@@ -66,7 +68,7 @@ export function PageHeaderProvider({
               </div>
             )}
           </div>
-        </header>
+        </header>}
 
         <main
           id="main-content"

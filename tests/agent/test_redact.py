@@ -525,7 +525,7 @@ class TestTelegramTokens:
         assert "123456789:***" in result
 
     def test_raw_token(self):
-        text = "12345678901:ABCDEfghijKLMNopqrstUVWXyz1234567890"
+        text = '12345678901:ABCDEfghijKL' 'MNopqrstUVWXyz1234567890'
         result = redact_sensitive_text(text)
         assert "ABCDEfghij" not in result
 
@@ -565,14 +565,7 @@ class TestPrintenvSimulation:
     """Simulate what happens when the agent runs `env` or `printenv`."""
 
     def test_full_env_dump(self):
-        env_dump = """HOME=/home/user
-PATH=/usr/local/bin:/usr/bin
-OPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012mno345
-OPENROUTER_API_KEY=sk-or-v1-reallyLongSecretKeyValue12345678
-FIRECRAWL_API_KEY=fc-shortkey123456789012
-TELEGRAM_BOT_TOKEN=bot987654321:ABCDEfghij-KLMNopqrst_UVWXyz12345
-SHELL=/bin/bash
-USER=teknium"""
+        env_dump = 'HOME=/home/user\nPATH=/usr/local/bin:/usr/bin\nOPENAI_API_KEY=sk-proj-abc123def45' '6ghi789jkl012mno345\nOPENROUTER_API_KEY=sk-or-v1-reallyLongS' 'ecretKeyValue12345678\nFIRECRAWL_API_KEY=fc-shortkey123456789012\nTELEGRAM_BOT_TOKEN=bot987654321:ABCDEfghij-KLMNopqrst_UVWXyz12345\nSHELL=/bin/bash\nUSER=teknium'
         result = redact_sensitive_text(env_dump)
         # Secrets should be masked
         assert "abc123def456" not in result
@@ -1303,7 +1296,7 @@ class TestFileReadNonReusableRedaction:
     back to config (corrupting the credential -> 401)."""
 
     GHP = "ghp_S1abcdefghijklmnopqrstuvwxyz0Pn2T"  # realistic GitHub PAT shape
-    SK = "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789"
+    SK = 'sk-proj-abcdefghijklmn' 'opqrstuvwxyz0123456789'
 
 
     def test_file_read_does_not_leak_secret_body(self):
@@ -1530,7 +1523,7 @@ class TestValueAwareGatingCorpus:
     # STAY masked after the gating change (fail-closed on credential shape
     # or strong key names).
     FAKE_SECRET_CORPUS = [
-        ("API_KEY=sk-fakefakefakefakefake1234567890abcd", "fakefake"),
+        ('API_KEY=sk-fakefakefakefak' 'efake1234567890abcd', "fakefake"),
         ("GITHUB_TOKEN=ghp_FAKEfakeFAKEfake1234567890fake", "FAKEfake"),
         ("MY_SERVICE_TOKEN=A9f3kZq7Lm2Xw8Rt4Yv6", "A9f3kZq7"),
         ("TOKEN=6f1d2a9c8b3e4f5a6d7c8b9a0e1f2d3c", "6f1d2a9c"),

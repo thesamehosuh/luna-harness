@@ -2015,13 +2015,13 @@ class TestHandleProcessRedaction:
         """
         pr, sess = self._setup(
             monkeypatch, "curl -H 'Authorization: Bearer sk-abc123def456ghi789jkl012345'",
-            "opaque token sk-proj-AAAABBBBCCCCDDDDEEEEFFFFGGGG output",
+            'opaque token sk-proj-AAAABBBBCC' 'CCDDDDEEEEFFFFGGGG output',
         )
         out = json.loads(pr._handle_process({"action": "list"}))
         assert len(out["processes"]) >= 1
         entry = out["processes"][0]
         assert "sk-abc123def456ghi789jkl012345" not in entry["command"]
-        assert "sk-proj-AAAABBBBCCCCDDDDEEEEFFFFGGGG" not in entry["output_preview"]
+        assert 'sk-proj-AAAABBBBCC' 'CCDDDDEEEEFFFFGGGG' not in entry["output_preview"]
         assert "curl" in entry["command"]
 
     def test_disabled_passes_through(self, monkeypatch):

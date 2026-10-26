@@ -316,3 +316,6 @@ luna/**/.env
 luna/**/.env.*
 !luna/**/*.env.template
 luna/tests/fixtures/room/raw/
+
+# Local editable-install metadata
+*.egg-info/
