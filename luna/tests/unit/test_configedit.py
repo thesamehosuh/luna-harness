@@ -67,6 +67,38 @@ def test_creates_missing_leaf_inside_existing_block():
     assert "emoji_filter: true" in out
 
 
+def test_replaces_indentless_sequence_without_leaving_old_items():
+    source = """\
+telegram:
+  allow_admin_from:
+  - '1001'
+  - '1002'
+  group_allowed_chats:
+  - '-1009'
+"""
+    out = write_config_value(source, ["telegram", "allow_admin_from"], ["2001"])
+    import yaml
+    parsed = yaml.safe_load(out)
+    assert parsed["telegram"]["allow_admin_from"] == ["2001"]
+    assert parsed["telegram"]["group_allowed_chats"] == ["-1009"]
+    assert "1001" not in out and "1002" not in out
+
+
+def test_deletes_indentless_sequence_without_consuming_sibling():
+    source = """\
+telegram:
+  allow_admin_from:
+  - '1001'
+  group_allowed_chats:
+  - '-1009'
+"""
+    out = write_config_value(source, ["telegram", "allow_admin_from"], None)
+    import yaml
+    parsed = yaml.safe_load(out)
+    assert "allow_admin_from" not in parsed["telegram"]
+    assert parsed["telegram"]["group_allowed_chats"] == ["-1009"]
+
+
 def test_missing_parent_is_created_and_inline_refused():
     # missing parents are created as blocks now; an inline parent value is still refused
     out = write_config_value(DOC, ["luna", "brand", "new_key"], 1)

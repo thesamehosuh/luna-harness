@@ -752,6 +752,7 @@ async def apply_telegram_onboarding(pairing_id: str, body: TelegramOnboardingApp
         record = _telegram_record_or_404(pairing_id)
         bot_token = record.bot_token
         bot_username = record.bot_username
+        owner_user_id = record.owner_user_id
         if not bot_token:
             raise HTTPException(status_code=409, detail="Telegram setup is not ready yet.")
 
@@ -761,6 +762,11 @@ async def apply_telegram_onboarding(pairing_id: str, body: TelegramOnboardingApp
         with _profile_scope(effective_profile):
             save_env_value("TELEGRAM_BOT_TOKEN", bot_token)
             save_env_value("TELEGRAM_ALLOWED_USERS", ",".join(allowed_user_ids))
+            if owner_user_id:
+                from hermes_cli.product_runtime import enabled
+                if enabled():
+                    from luna_cli.onboarding import configure_telegram_destinations
+                    configure_telegram_destinations(owner_user_id)
             _write_platform_enabled("telegram", True)
 
     with _onboarding_save_errors("Telegram onboarding apply failed", "Failed to save Telegram setup."):

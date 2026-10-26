@@ -70,6 +70,7 @@ export default function OnboardingPage() {
   const [wakeKey, setWakeKey] = useState("");
   const [telegram, setTelegram] = useState({ token: "", chatId: "", adminId: "" });
   const [telegramResult, setTelegramResult] = useState("");
+  const [telegramHome, setTelegramHome] = useState<"owner" | "group" | "keep">("owner");
   const [personaId, setPersonaId] = useState("generic");
   const { toast, showToast } = useToast();
   const { setEnd } = usePageHeader();
@@ -87,6 +88,10 @@ export default function OnboardingPage() {
         chatId: previous.chatId || String((messaging.groups as string[] | undefined)?.[0] || ""),
         adminId: previous.adminId || String((messaging.admin_ids as string[] | undefined)?.[0] || ""),
       }));
+      if (messaging?.home_chat_id) {
+        const homeId = String(messaging.home_chat_id);
+        setTelegramHome((messaging.admin_ids as string[] | undefined)?.includes(homeId) ? "owner" : (messaging.groups as string[] | undefined)?.includes(homeId) ? "group" : "keep");
+      }
       const saved = report.steps.find(step => step.id === "provider");
       if (saved?.configured === true) {
         const preset = PROVIDER_PRESETS.find(item => item.provider === saved.provider)
@@ -191,18 +196,7 @@ export default function OnboardingPage() {
       const union = (...values: string[]) => [...new Set(values.filter(value => value && value !== "0"))];
       // Default admin must also pass the transport's DM allowlist.
       await api.setEnvVar("TELEGRAM_ALLOWED_USERS", union(...ids("allowed_user_ids"), admin).join(","));
-      await api.saveConfig({
-        telegram: {
-          ...(chat ? { group_allowed_chats: union(...ids("groups"), chat) } : {}),
-          ...(admin ? { allow_admin_from: union(...ids("admin_ids"), admin), group_allow_admin_from: union(...ids("group_admin_ids"), admin) } : {}),
-        },
-        ...(chat
-          ? { luna: { room: { chat_id: chat } } }
-          : {}),
-        ...(admin
-          ? { luna: { notify: { operator_chat: { telegram: admin } } } }
-          : {}),
-      });
+      await onboardingApi.telegram(admin, chat, telegramHome);
       await api.updateMessagingPlatform("telegram", { enabled: true });
       setTelegram(previous => ({ ...previous, token: "" }));
       setTelegramResult("Connecting Telegram…");
@@ -374,6 +368,7 @@ export default function OnboardingPage() {
               <Field label="Your Telegram user ID · default admin"><input className={inputClass} inputMode="numeric" placeholder="123456789" value={telegram.adminId} onChange={event => setTelegram({ ...telegram, adminId: event.target.value })} /></Field>
               <Field label="Group chat ID"><input className={inputClass} inputMode="text" placeholder="-100…" value={telegram.chatId} onChange={event => setTelegram({ ...telegram, chatId: event.target.value })} /></Field>
             </div>
+            <Field label="Notifications"><Select label="Telegram notification home" value={telegramHome} onValueChange={value => setTelegramHome(value as "owner" | "group" | "keep")} options={[{ value: "owner", label: "Your DM" }, { value: "group", label: "Your group · visible to everyone" }, ...(current.home_chat_id ? [{ value: "keep", label: "Keep saved home" }] : [])]} /></Field>
             <div className="onboarding-card-actions"><Link to="/channels" className="onboarding-quiet-link">Connections<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={saveTelegram} disabled={busy !== null || !/^[1-9]\d*$/.test(telegram.adminId.trim()) || !/^-[1-9]\d*$/.test(telegram.chatId.trim()) || (!telegram.token.trim() && current.token_present !== true)}>{busy === "telegram" ? "Connecting…" : "Save & connect"}</Button></div>
             {telegramResult && <p role="status" className="text-sm text-muted-foreground">{telegramResult}</p>}
           </div>}

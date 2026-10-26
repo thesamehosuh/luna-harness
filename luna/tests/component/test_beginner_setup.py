@@ -207,6 +207,39 @@ def test_memory_restore_starts_containers_when_bridge_port_is_unchanged(setup_ho
     assert calls == [["owned-memory-up"]]
 
 
+def test_loopback_restore_refreshes_dynamic_database_ports(setup_home, monkeypatch):
+    import yaml
+    from luna_core import managed_memory, memory_worker, config_read, data_ops, memory_network
+    stack = setup_home / "honcho"; stack.mkdir()
+    (stack / ".embedding-contract.json").write_text("{}")
+    (stack / ".env").write_text("HONCHO_PORT=8700\nDERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL=http://127.0.0.1:34567/v1\n")
+    (stack / ".connection.json").write_text('{"mode":"loopback"}')
+    (stack / "docker-compose.connection.yaml").write_text(yaml.safe_dump({"services": {
+        "api": {"environment": {"DB_CONNECTION_URI": "postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@127.0.0.1:12345/postgres"}},
+    }}))
+    monkeypatch.setattr(config_read, "section", lambda *args, **kwargs: "enabled")
+    monkeypatch.setattr(managed_memory, "_contract", lambda path: None)
+    monkeypatch.setattr(memory_worker, "ensure", lambda: {"port": 34567})
+    monkeypatch.setattr(memory_network, "worker_url", lambda port: f"http://127.0.0.1:{port}/v1")
+    monkeypatch.setattr(data_ops, "compose_command", lambda _stack, *args: list(args))
+    ports = {"database": 22345, "redis": 22346}
+    def compose(*args):
+        if args[0] == "port": return SimpleNamespace(returncode=0, stdout=f"127.0.0.1:{ports[args[1]]}")
+        return SimpleNamespace(returncode=0, stdout="")
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda command, **kwargs: (calls.append(command) or compose(*command)))
+    managed_memory._restores.clear()
+    managed_memory.restore()
+    assert calls == [
+        ["up", "-d", "--wait", "database", "redis"],
+        ["port", "database", "5432"],
+        ["port", "redis", "6379"],
+        ["up", "-d", "--force-recreate", "api", "deriver"],
+    ]
+    updated = yaml.safe_load((stack / "docker-compose.connection.yaml").read_text())
+    assert ":22345/postgres" in updated["services"]["api"]["environment"]["DB_CONNECTION_URI"]
+
+
 def test_anthropic_auxiliary_adapter_forwards_memory_timeout(monkeypatch):
     from agent import anthropic_adapter, transports
     from agent.auxiliary_client import _AnthropicCompletionsAdapter

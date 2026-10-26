@@ -5,14 +5,14 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  soul: vi.fn(), report: vi.fn(), choice: vi.fn(), assign: vi.fn(), env: vi.fn(), config: vi.fn(), platform: vi.fn(), status: vi.fn(), start: vi.fn(), connection: vi.fn(), actionStatus: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
+  soul: vi.fn(), report: vi.fn(), choice: vi.fn(), assign: vi.fn(), env: vi.fn(), config: vi.fn(), telegramSave: vi.fn(), platform: vi.fn(), status: vi.fn(), start: vi.fn(), connection: vi.fn(), actionStatus: vi.fn(), showToast: vi.fn(), setEnd: vi.fn(),
 }));
 vi.mock("@/contexts/usePageHeader", () => ({ usePageHeader: () => ({ setEnd: mocks.setEnd }) }));
 vi.mock("@nous-research/ui/hooks/use-toast", () => ({ useToast: () => ({ showToast: mocks.showToast }) }));
 vi.mock("@nous-research/ui/ui/components/toast", () => ({ Toast: () => null }));
 vi.mock("@/lib/luna-onboarding", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/luna-onboarding")>(),
-  onboardingApi: { get: mocks.report, choice: mocks.choice, personas: async () => ({ personas: [{ id: "generic", name: "Companion", description: "A fixture", content: "# Fixture persona" }] }) },
+  onboardingApi: { telegram: mocks.telegramSave, get: mocks.report, choice: mocks.choice, personas: async () => ({ personas: [{ id: "generic", name: "Companion", description: "A fixture", content: "# Fixture persona" }] }) },
 }));
 vi.mock("@/lib/api", () => ({ getManagementProfile: () => "test-profile", api: { updateProfileSoul: mocks.soul, setModelAssignment: mocks.assign, getModelOptions: vi.fn(), setEnvVar: mocks.env, saveConfig: mocks.config, updateMessagingPlatform: mocks.platform, getStatus: mocks.status, startGateway: mocks.start, testMessagingPlatform: mocks.connection, getActionStatus: mocks.actionStatus } }));
 vi.mock("@/components/OpenCodeSetup", () => ({ default: () => <div>Free model setup</div> }));
@@ -104,7 +104,6 @@ it("requires owner and group IDs and grants the default admin DM access without 
   expect(host.textContent).toContain("Telegram connected. Send your bot a message.");
   expect(mocks.env).toHaveBeenCalledWith("TELEGRAM_ALLOWED_USERS", "234567,345678");
   expect(mocks.env).not.toHaveBeenCalledWith("TELEGRAM_BOT_TOKEN", expect.anything());
-  expect(mocks.config).toHaveBeenCalledWith(expect.objectContaining({ telegram: {
-    group_allowed_chats: ["-100234567", "-100345678"], allow_admin_from: ["234567", "345678"], group_allow_admin_from: ["234567", "345678"],
-  } }));
+  expect(mocks.telegramSave).toHaveBeenCalledWith("345678", "-100345678", "owner");
+  expect(mocks.telegramSave.mock.invocationCallOrder[0]).toBeLessThan(mocks.start.mock.invocationCallOrder[0]);
 });

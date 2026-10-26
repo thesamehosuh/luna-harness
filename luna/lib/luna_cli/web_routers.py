@@ -429,6 +429,20 @@ async def get_onboarding():
     return onboarding.step_report()
 
 
+class TelegramDestinationsRequest(BaseModel):
+    owner_id: str
+    group_chat_id: Optional[str] = None
+    home_target: Literal["owner", "group", "keep"] = "keep"
+
+
+@router.put("/onboarding/telegram")
+async def put_telegram_destinations(body: TelegramDestinationsRequest):
+    try:
+        return await asyncio.to_thread(onboarding.configure_telegram_destinations, body.owner_id, body.group_chat_id, body.home_target)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 class SetupChoiceRequest(BaseModel):
     step: Literal["honcho", "wake_test", "telegram"]
     choice: Literal["enabled", "skipped"]

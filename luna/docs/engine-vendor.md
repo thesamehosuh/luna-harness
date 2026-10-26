@@ -493,3 +493,17 @@ stalled-request timeout, TypeScript and production dashboard/TUI builds.
   the existing gateway process identity checks. Direct Start execs the canonical
   run command so liveness, stop, restart and the one-poller lock agree. Non-gateway
   commands and unrelated Python command strings remain excluded.
+
+2026-10-26 Telegram home-channel correction:
+- `hermes_cli/web_routers/messaging.py`: QR/pairing apply uses the transport-verified
+  owner ID to complete Luna's Telegram destination defaults after credentials save.
+  It never infers identity from message contents; non-Luna setups are unchanged.
+- `luna/lib/luna_cli/onboarding.py`, `luna/lib/luna_cli/web_routers.py`, and
+  `web/src/{lib/luna-onboarding.ts,pages/OnboardingPage.tsx}`: save Telegram owner,
+  group binding, and notification home together. The owner DM is the default home;
+  an explicit group home remains selectable. Existing grants and custom destinations
+  are preserved.
+- `luna/lib/luna_core/configedit.py`: same-indent YAML sequence items are included
+  when replacing/deleting a block, so admin/group lists cannot leave stale entries.
+- Focused regressions cover config editing, onboarding persistence, and pairing apply.
+  Dynamic prompt sidecars and cached system/channel prompt signatures are unchanged.

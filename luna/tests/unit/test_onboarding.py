@@ -114,6 +114,9 @@ def test_telegram_check_reads_token_and_group(home, monkeypatch):
 
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
     report = onboarding.check_telegram()
+    assert report["status"] == "todo"  # Access alone does not configure notifications.
+    assert "notification home" in report["detail"]
+    report = onboarding.configure_telegram_destinations("1001", "-100123")
     assert report["status"] == "done"
     assert report["groups"] == ["-100123"]
 
@@ -260,3 +263,59 @@ def test_setup_and_character_share_presets_without_duplicate_starter(home):
     (home / "SOUL.md").write_text(custom, encoding="utf-8")
     assert onboarding.personas()[0]["content"] == custom
     assert onboarding.personas()[0]["is_current"] is True
+
+
+def test_telegram_destinations_reach_the_real_gateway_and_room_together(home, monkeypatch):
+    import yaml
+    from gateway.config import load_gateway_config, Platform
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
+    report = onboarding.configure_telegram_destinations("2002", "-100456", "owner")
+    cfg = yaml.safe_load((home / "config.yaml").read_text())
+    assert cfg["luna"]["room"]["chat_id"] == "-100456"
+    assert cfg["luna"]["notify"]["operator_chat"]["telegram"] == "2002"
+    assert cfg["telegram"]["allow_admin_from"] == ["1001", "2002"]
+    assert cfg["telegram"]["group_allowed_chats"] == ["-100123", "-100456"]
+    assert load_gateway_config().get_home_channel(Platform.TELEGRAM).chat_id == "2002"
+    assert report["home_chat_id"] == "2002"
+    assert report["room_bound"] is True
+
+
+def test_telegram_pairing_defaults_preserve_existing_home_topic_and_operator(home):
+    import yaml
+    cfg = yaml.safe_load((home / "config.yaml").read_text())
+    existing = {"platform": "telegram", "chat_id": "-100789", "name": "Saved", "thread_id": "7"}
+    cfg["platforms"] = {"telegram": {"home_channel": existing}}
+    cfg["luna"]["notify"] = {"operator_chat": {"telegram": "3003"}}
+    (home / "config.yaml").write_text(yaml.safe_dump(cfg))
+    onboarding.configure_telegram_destinations("2002")
+    saved = yaml.safe_load((home / "config.yaml").read_text())
+    assert saved["platforms"]["telegram"]["home_channel"] == existing
+    assert saved["luna"]["notify"]["operator_chat"]["telegram"] == "3003"
+    assert saved["luna"]["room"]["chat_id"] == "-100123"
+
+
+@pytest.mark.parametrize("owner,group", [("bad", "-100456"), ("2002", "100456"), ("0", "-100456")])
+def test_telegram_invalid_ids_cannot_partially_change_destinations(home, owner, group):
+    before = (home / "config.yaml").read_bytes()
+    with pytest.raises(ValueError):
+        onboarding.configure_telegram_destinations(owner, group)
+    assert (home / "config.yaml").read_bytes() == before
+
+
+def test_telegram_status_detects_saved_access_with_missing_home_and_room(home, monkeypatch):
+    import yaml
+    cfg = yaml.safe_load((home / "config.yaml").read_text()); cfg["luna"]["room"]["chat_id"] = ""
+    (home / "config.yaml").write_text(yaml.safe_dump(cfg))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
+    report = onboarding.check_telegram()
+    assert report["status"] == "todo"
+    assert "notification home" in report["detail"]
+    assert "companion group binding" in report["detail"]
+
+
+def test_group_notification_home_is_explicit_and_keeps_operator_private(home):
+    import yaml
+    onboarding.configure_telegram_destinations("2002", "-100456", "group")
+    cfg = yaml.safe_load((home / "config.yaml").read_text())
+    assert cfg["platforms"]["telegram"]["home_channel"]["chat_id"] == "-100456"
+    assert cfg["luna"]["notify"]["operator_chat"]["telegram"] == "2002"

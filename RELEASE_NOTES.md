@@ -1,3 +1,10 @@
+# Luna 0.1.0-alpha.7
+
+- Telegram setup now saves the owner DM as the notification home and binds the selected group.
+- Pairing setup applies the verified owner ID, without guessing from message text.
+- Repair same-indent YAML list updates so saved Telegram access lists do not retain stale entries.
+- Refresh Honcho's loopback database port after Docker restarts so memory starts with Luna.
+
 # Luna 0.1.0-alpha.6
 
 - Start gateway works in desktop installations without an OS service.

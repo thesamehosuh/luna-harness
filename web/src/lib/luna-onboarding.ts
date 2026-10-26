@@ -54,6 +54,9 @@ export interface WakeTestResult {
 
 export const onboardingApi = {
   get: () => fetchJSON<OnboardingReport>("/api/luna/onboarding"),
+  telegram: (owner_id: string, group_chat_id: string, home_target: "owner" | "group" | "keep") => fetchJSON<StepReport>("/api/luna/onboarding/telegram", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ owner_id, group_chat_id, home_target }),
+  }),
   choice: (step: "honcho" | "wake_test" | "telegram", choice: "enabled" | "skipped") =>
     fetchJSON<OnboardingReport>("/api/luna/onboarding/choice", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step, choice }) }),
   personas: () => fetchJSON<{ personas: PersonaPreset[] }>("/api/luna/onboarding/personas"),

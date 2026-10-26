@@ -36,12 +36,16 @@ def _block_end(lines: Sequence[str], start: int, indent: int) -> int:
     end = start + 1
     while end < len(lines):
         line = lines[end]
-        parsed = _line_key(line)
         if line.strip() and not line.lstrip().startswith("#"):
             current = len(line) - len(line.lstrip())
-            if current <= indent:
+            # PyYAML commonly emits block sequence entries at the same indentation as
+            # their parent key ("key:\n- value"). Those dashes still belong to the
+            # value; a same-indent mapping key marks the next sibling block.
+            same_indent_sequence_item = (
+                current == indent and re.match(r"^-(?:\s|$)", line.lstrip()) is not None
+            )
+            if current < indent or (current == indent and not same_indent_sequence_item):
                 break
-        del parsed
         end += 1
     return end
 

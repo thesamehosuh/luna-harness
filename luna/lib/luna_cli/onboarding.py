@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 import secrets
 import sqlite3
 import subprocess
@@ -150,6 +151,51 @@ def check_provider() -> Dict[str, Any]:
                    key_present=bool(keys), account_connected=account_connected, key_required=not (loopback or account_connected), keys_found=sorted(keys))
 
 
+def configure_telegram_destinations(owner_id: str, group_chat_id: Optional[str] = None, home_target: str = "keep") -> Dict[str, Any]:
+    """Publish owner, room and notification defaults in one config transaction.
+
+    The owner DM is the private default home. Explicit existing homes/notification
+    destinations survive credential changes; room binding follows the selected group.
+    """
+    owner = str(owner_id).strip()
+    group = str(group_chat_id).strip() if group_chat_id is not None else ""
+    if not re.fullmatch(r"[1-9]\d*", owner):
+        raise ValueError("Owner must be a positive Telegram user ID")
+    if group and not re.fullmatch(r"-[1-9]\d*", group):
+        raise ValueError("Group must be a negative Telegram chat ID")
+    if home_target not in {"keep", "owner", "group"} or (home_target == "group" and not group):
+        raise ValueError("Choose a valid notification destination")
+    from luna_core import settings
+    from luna_core.configedit import write_config_value, read_config_value
+    from gateway.config import load_gateway_config, Platform
+    import yaml
+    path = tune._home() / "config.yaml"
+    with settings.transaction():
+        text = settings.read(path) if settings.exists(path) else ""
+        config = yaml.safe_load(text) or {}
+        telegram = config.get("telegram") or {}
+        def add(key, value):
+            existing = telegram.get(key) or []
+            if not isinstance(existing, list):
+                raise ValueError("Existing Telegram access settings need repair")
+            return list(dict.fromkeys([*(str(v) for v in existing if str(v) != "0"), value]))
+        home = load_gateway_config().get_home_channel(Platform.TELEGRAM)
+        keep_home = home_target == "keep" and home and str(home.chat_id) not in {"", "0"}
+        home_config = home.to_dict() if keep_home else {"platform": "telegram", "chat_id": group if home_target == "group" else owner, "name": "Group" if home_target == "group" else "Owner DM"}
+        changes = [(('telegram', 'allow_admin_from'), add('allow_admin_from', owner)),
+                   (('telegram', 'group_allow_admin_from'), add('group_allow_admin_from', owner)),
+                   (('platforms', 'telegram', 'home_channel'), home_config)]
+        if group:
+            changes += [(('telegram', 'group_allowed_chats'), add('group_allowed_chats', group)),
+                        (('luna', 'room', 'chat_id'), group)]
+        if read_config_value(config, ('luna', 'notify', 'operator_chat', 'telegram')) in (None, ""):
+            changes.append((('luna', 'notify', 'operator_chat', 'telegram'), owner))
+        for key, value in changes:
+            text = write_config_value(text, key, value)
+        settings.write(path, text)
+    return check_telegram()
+
+
 def check_telegram() -> Dict[str, Any]:
     cfg = _config()
     token = _secret("TELEGRAM_BOT_TOKEN")
@@ -171,9 +217,20 @@ def check_telegram() -> Dict[str, Any]:
         missing.append("group chat binding")
     if not admin:
         missing.append("owner user id")
-    ok = not _placeholder(token) and (bool(allowed) or room_bound) and bool(admin)
+    try:
+        from gateway.config import load_gateway_config, Platform
+        home = load_gateway_config().get_home_channel(Platform.TELEGRAM)
+        home_id = str(home.chat_id) if home else ""
+    except Exception:
+        home_id = ""
+    if not home_id or home_id == "0":
+        missing.append("notification home")
+    if allowed and not room_bound:
+        missing.append("companion group binding")
+    ok = not missing
     detail = "ready" if ok else "missing: " + ", ".join(missing)
     return _status(ok, detail, token_present=not _placeholder(token), groups=allowed or ([room_chat] if room_bound else []),
+                   home_chat_id=home_id, room_bound=room_bound,
                    admin_configured=bool(admin), admin_ids=admin,
                    group_admin_ids=[str(x) for x in (telegram.get("group_allow_admin_from") or []) if str(x) != "0"],
                    allowed_user_ids=[value.strip() for value in _secret("TELEGRAM_ALLOWED_USERS").split(",") if value.strip()])

@@ -39,8 +39,17 @@ def _loopback(stack, *, database_port=0, redis_port=0):
     value = {"services": {"api": api, "deriver": {"network_mode": "host", "environment": environment},
         "bootstrap": {"network_mode": "host", "environment": environment},
         "database": {"ports": ["127.0.0.1::5432"]}, "redis": {"ports": ["127.0.0.1::6379"]}}}
-    _replace(stack / "docker-compose.connection.yaml", yaml.safe_dump(value, sort_keys=False))
+    path = stack / "docker-compose.connection.yaml"
+    try:
+        previous = yaml.safe_load(path.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        previous = {}
+    previous_environment = (previous.get("services", {}).get("api", {}).get("environment") or {})
+    changed = any(previous_environment.get(key) != setting for key, setting in environment.items())
+    if changed:
+        _replace(path, yaml.safe_dump(value, sort_keys=False))
     _replace(stack / ".connection.json", json.dumps({"mode": "loopback"}))
+    return changed
 
 
 def configure(stack, worker, prefix):
@@ -76,4 +85,4 @@ def configure(stack, worker, prefix):
 def finish_loopback(stack, run):
     database = int(run("port", "database", "5432").stdout.strip().rsplit(":", 1)[1])
     redis = int(run("port", "redis", "6379").stdout.strip().rsplit(":", 1)[1])
-    _loopback(stack, database_port=database, redis_port=redis)
+    return _loopback(stack, database_port=database, redis_port=redis)
