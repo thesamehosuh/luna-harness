@@ -109,6 +109,14 @@ def test_build_request_keys_questions_by_id():
     assert body["questions"]["a"]["criteria"] == {"true": "y", "false": "n"}
 
 
+def test_route_instructions_reach_each_question_without_mutating_it():
+    questions = [noul("a", "Question A"), noul("b", "Question B")]
+    body = JevClient(instructions="Judge as a quiet companion.").build_request({}, questions)
+    assert body["questions"]["a"]["instructions"] == "Judge as a quiet companion.\n\nQuestion A"
+    assert body["questions"]["b"]["instructions"] == "Judge as a quiet companion.\n\nQuestion B"
+    assert questions[0]["instructions"] == "Question A"
+
+
 def test_retries_on_429_then_succeeds():
     attempts = {"n": 0}
     slept = []

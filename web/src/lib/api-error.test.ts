@@ -102,6 +102,12 @@ describe("fetchJSON error contract", () => {
 });
 
 describe("extractDetail", () => {
+  it("shows the rejected fields from an atomic Luna settings save", () => {
+    expect(extractDetail(JSON.stringify({ detail: {
+      watched_chats: { ok: false, error: "Choose only Telegram groups already allowed in Channels" },
+      budget: { ok: false, error: "unknown budget key 'old_setting'" },
+    } }))).toBe("watched_chats: Choose only Telegram groups already allowed in Channels; budget: unknown budget key 'old_setting'");
+  });
   it("joins FastAPI validation errors and ignores HTML bodies", () => {
     expect(
       extractDetail(JSON.stringify({ detail: [{ msg: "field required", loc: ["body", "x"] }] })),

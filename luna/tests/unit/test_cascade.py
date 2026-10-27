@@ -470,6 +470,49 @@ def test_decide_directed_wake(budget):
     assert d.directed is True
 
 
+@pytest.mark.parametrize("action,enabled,probability,expected", [
+    ("message", True, 0.2, "silent"),
+    ("message", True, 0.9, "message"),
+    ("message", True, None, "silent"),
+    ("reaction", True, 0.2, "message"),
+    ("both", False, None, "message"),
+])
+def test_custom_conditions_gate_only_their_selected_action(budget, action, enabled, probability, expected):
+    answers = _answers(message_fit=0.9)
+    if probability is not None:
+        answers["custom_music"] = JevAnswer(id="custom_music", type="noul", value=probability)
+    rules = [{"id": "music", "name": "Music", "instructions": "Is this about music?", "action": action,
+              "enabled": enabled, "threshold": 0.8}]
+    d = decide(_FakeClient(answers), candidate=_candidate(), ctx=_ctx(), recent=[], budget=budget, now=NOW,
+               decision_policy={"rules": rules})
+    assert d.action == expected
+
+
+def test_question_overrides_and_custom_palette_reach_the_client(budget):
+    class InspectClient:
+        def ask(self, state, questions):
+            specs = {q["id"]: q for q in questions}
+            assert specs[MESSAGE_FIT]["instructions"] == "Is a music tip welcome?"
+            assert specs[REACTION_EMOJI]["criteria"] == {"💜": "gentle support"}
+            assert specs[REACTION_EMOJI]["instructions"] == "Choose from the configured palette."
+            answers = _answers(message_fit=0.9, reaction_emoji="💜")
+            return answers
+    d = decide(InspectClient(), candidate=_candidate(), ctx=_ctx(), recent=[], budget=budget, now=NOW,
+               reactions_enabled=True, allowed_reactions=["💜"], reaction_criteria={"💜": "gentle support"},
+               decision_policy={"questions": {MESSAGE_FIT: {"instructions": "Is a music tip welcome?"},
+                                               REACTION_EMOJI: {"instructions": "Choose from the configured palette."}}})
+    assert d.action == "message"
+
+
+def test_custom_rule_cannot_override_a_privacy_veto(budget):
+    answers = _answers(message_fit=0.9, private=0.99)
+    answers["custom_music"] = JevAnswer(id="custom_music", type="noul", value=1.0)
+    d = decide(_FakeClient(answers), candidate=_candidate(), ctx=_ctx(), recent=[], budget=budget, now=NOW,
+               decision_policy={"rules": [{"id": "music", "name": "Music", "instructions": "Is this music?"}]})
+    assert d.action == "silent"
+    assert "safety" in d.reason
+
+
 def test_decide_skips_jev_when_prefiltered(budget):
     client = _FakeClient(_answers(message_fit=0.9))
     d = decide(client, candidate=_candidate(is_bot=True), ctx=_ctx(), recent=[], budget=budget,

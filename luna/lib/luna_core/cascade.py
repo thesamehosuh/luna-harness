@@ -403,9 +403,8 @@ def build_questions(reactions: Optional[Sequence[str]] = None) -> List[Dict[str,
         criteria = {e: REACTION_CRITERIA.get(e, "") for e in reactions}
         questions.append(choice(REACTION_EMOJI,
                                 "If Luna were to react to `candidate.text`, which single reaction fits "
-                                "best? Do not default to 👍: use 😭 for chaotic, absurd, ranting, or "
-                                "funny messages and 🤣 only for genuinely funny ones; reserve 👍 for "
-                                "serious, sincere agreement.",
+                                "best? Use the meanings in the configured choices. Do not prefer a "
+                                "reaction merely because it is common; match this particular message.",
                                 criteria))
         questions.append(noul(REACTION_FRESH,
                               "Would a reaction from Luna right now feel fresh, given "
@@ -496,6 +495,7 @@ def compose(
     allowed_reactions: Optional[Sequence[str]] = None,
     ctx: Optional[Stage0Context] = None,
     candidate_text: str = "",
+    questions: Optional[List[Dict[str, Any]]] = None,
 ) -> Decision:
     """Stage 2 — deterministic composition. Missing answers fail closed (silent)."""
     required = [ADD_VALUE, OPEN_Q, TOPIC_FIT, REDUNDANT, VENTING, SENSITIVE, PRIVATE,
@@ -505,7 +505,7 @@ def compose(
 
     from luna_core.jev import validate_answers
     try:
-        validate_answers(answers, build_questions(allowed_reactions if reactions_enabled else None), require_all=False)
+        validate_answers(answers, questions if questions is not None else build_questions(allowed_reactions if reactions_enabled else None), require_all=False)
     except JevError:
         return Decision(action="silent", reason="invalid jev answers", stage="stage2")
 
@@ -685,6 +685,8 @@ def decide(
     extra_state: Optional[Dict[str, Any]] = None,
     room_register: Optional[str] = None,
     before_jev=None,
+    decision_policy=None,
+    reaction_criteria=None,
 ) -> Decision:
     """Run stages 0–2. Stage 3 (budget) is re-checked by the caller before recording a wake."""
     config = config or CascadeConfig()
@@ -702,7 +704,13 @@ def decide(
         return Decision(action="silent", reason="judgement resource guard", stage="guard")
     state = build_state(candidate, recent, config=config, extra=extra_state, room_register=room_register)
     try:
-        answers = client.ask(state, build_questions(allowed_reactions if reactions_enabled else None))
+        from luna_core.behaviour_policy import validate_policy, apply_policy, blocked_condition
+        policy = validate_policy(decision_policy or {}, build_questions(list(REACTION_CRITERIA)))
+        questions = apply_policy(build_questions(allowed_reactions if reactions_enabled else None), policy, reaction_criteria)
+        answers = client.ask(state, questions)
+        # Client replacements supplied by integrations must obey the same schema.
+        from luna_core.jev import validate_answers
+        validate_answers(answers, questions, require_all=False)
     except JevError as exc:
         return Decision(action="silent", reason=f"jev error (fail closed): {exc}", stage="stage1")
     except Exception as exc:  # never let a client bug crash the poller into a retry loop
@@ -711,7 +719,10 @@ def decide(
 
     decision = compose(answers, config=config, reactions_enabled=reactions_enabled,
                        allowed_reactions=allowed_reactions, ctx=ctx,
-                       candidate_text=candidate.text)
+                       candidate_text=candidate.text, questions=questions)
+    blocked = blocked_condition(decision, answers, policy)
+    if blocked:
+        decision = replace(decision, action="silent", reason=f"custom condition: {blocked}")
     decision.chat_id = candidate.chat_id
     decision.target_message_id = candidate.message_id
 

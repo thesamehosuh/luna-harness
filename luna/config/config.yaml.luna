@@ -396,6 +396,13 @@ luna:
     settle_seconds: 10
     poll_seconds: 3
     stale_after_minutes: 15
+    # Dashboard-authored Jev question/rubric overrides and extra yes/no conditions.
+    # Empty overrides retain built-in judgments; custom rules only restrict wakes.
+    decision:
+      questions: {}
+      rules: []
+    # Override directed/message wake briefs in Behaviour; {} uses the visible defaults.
+    wake_prompts: {}
     # jev is Zen-only. OpenCode Go does NOT serve /systemone.
     jev:
       # Route chain is an ordered list of NAMES from the `providers` registry below — hermes
@@ -497,6 +504,8 @@ luna:
     # when jev answers, its semantic "does this name the companion" judgment decides, never this regex.
     mention_fallback: []
     reactions:
+      # Emoji -> meaning used by Jev. Edit alongside the allowed palette in Behaviour.
+      criteria: {}
       # Opt-in: ships EMPTY (AGENTS.md §7). Self-waking reactions are a companion feature some
       # people love and others find uncanny, so the default is silence and you add your palette.
       # Uncomment to enable. 😭 is the versatile, most-used one.

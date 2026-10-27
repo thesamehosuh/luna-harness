@@ -241,6 +241,7 @@ export interface JevConfig {
        *  is how the wake-policy form could silently drop it on save. */
       instructions?: string;
       tier?: string;
+      timeout_seconds?: number;
     }
   >;
 }
@@ -285,8 +286,34 @@ export interface BehaviourBundle {
   stale_after_minutes: number | null;
   budget: Record<string, number | null>;
   mention_fallback: string[];
-  reactions: { allowed: string[] };
+  reactions: { allowed: string[]; criteria?: Record<string, string> };
+  reaction_defaults?: Record<string, string>;
+  decision?: DecisionPolicy;
+  question_defaults?: JudgmentQuestion[];
+  wake_prompts?: Partial<Record<"directed" | "message", string>>;
+  wake_prompt_defaults?: Record<"directed" | "message", string>;
   jev: JevConfig;
+}
+
+export interface JudgmentQuestion {
+  id: string;
+  type: "noul" | "choice" | "score";
+  instructions: string;
+  criteria: Record<string, string> | string[];
+}
+
+export interface WakeCondition {
+  id: string;
+  name: string;
+  instructions: string;
+  action: "both" | "message" | "reaction";
+  threshold: number;
+  enabled: boolean;
+}
+
+export interface DecisionPolicy {
+  questions: Record<string, Partial<Pick<JudgmentQuestion, "instructions" | "criteria">>>;
+  rules: WakeCondition[];
 }
 
 // ── Client ─────────────────────────────────────────────────────────────────

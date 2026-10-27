@@ -286,6 +286,11 @@ _STATIC: Dict[str, Dict[str, Any]] = {
         minimum=1, maximum=1440, step=1,
     ),
     # jev route chain
+    "luna.ambient.decision.questions": _field("object", "Jev question prompt and rubric overrides; edit in Behaviour."),
+    "luna.ambient.decision.rules": _list("Custom yes/no conditions scoped to text wakes, reactions, or both."),
+    "luna.ambient.wake_prompts.directed": _text("Prompt sent when someone addresses your companion; empty uses the default."),
+    "luna.ambient.wake_prompts.message": _text("Spontaneous text wake prompt. Supports {contribution_type}."),
+    "luna.ambient.reactions.criteria": _field("object", "Meaning of each reaction emoji for Jev."),
     "luna.ambient.jev.timeout_seconds": _num(
         "Total Jev judgment deadline across routes and retries.", minimum=1, maximum=60, step=1,
     ),

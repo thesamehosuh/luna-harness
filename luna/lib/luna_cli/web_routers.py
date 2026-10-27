@@ -165,11 +165,14 @@ class BehaviourUpdate(BaseModel):
     settle_seconds: Optional[int] = None
     poll_seconds: Optional[int] = None
     stale_after_minutes: Optional[int] = None
+    watched_chats: Optional[List[str]] = None
     budget: Optional[Dict[str, Optional[int]]] = None
     mention_fallback: Optional[List[str]] = None
     reactions: Optional[Dict[str, Any]] = None
     jev: Optional[Dict[str, Any]] = None
     conversation: Optional[Dict[str, Any]] = None
+    decision: Optional[Dict[str, Any]] = None
+    wake_prompts: Optional[Dict[str, Any]] = None
 
 
 # ── Behaviour (wake tuning) ──────────────────────────────────────────────────────────────────────

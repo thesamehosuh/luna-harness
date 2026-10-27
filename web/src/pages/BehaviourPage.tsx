@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Play, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Play, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
+import { Switch } from "@nous-research/ui/ui/components/switch";
 import { H2 } from "@/components/ui/h2";
 import { Card, CardContent } from "@/components/ui/Card";
 import { useToast } from "@nous-research/ui/hooks/use-toast";
 import { Toast } from "@nous-research/ui/ui/components/toast";
 import { BlossomBranch } from "@/components/BlossomBranch";
+import { BehaviourEditors } from "@/components/BehaviourEditors";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { errorMessage } from "@/lib/api-error";
 import { isDraftDirty, useUnsavedChanges } from "@/hooks/useUnsavedChanges";
@@ -29,10 +31,10 @@ import {
 
 const inputClass = "rounded-xl border border-border bg-background/70 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 
-/** Keys the backend accepts per provider that this form does not render. Preserved on write. */
+/** Optional route fields, kept separately from the required connection fields. */
 const PROVIDER_PASSTHROUGH = ["endpoint", "instructions", "tier", "timeout_seconds"] as const;
 
-/** The non-rendered provider keys of one loaded entry, kept so a save cannot delete them. */
+/** Preserve optional values verbatim until the corresponding control is edited. */
 function providerExtras(entry: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of PROVIDER_PASSTHROUGH) {
@@ -53,11 +55,16 @@ function policyBaseline(behaviour: BehaviourBundle) {
   return {
     ...(behaviour.conversation ? { conversation: { ...behaviour.conversation } } : {}),
     dry_run: behaviour.dry_run !== false,
+    settle_seconds: behaviour.settle_seconds ?? 10,
+    poll_seconds: behaviour.poll_seconds ?? 3,
+    stale_after_minutes: behaviour.stale_after_minutes ?? 15,
     room_register: behaviour.room_register ?? "",
     watched_chats: behaviour.watched_chats ?? [],
     budget: { ...behaviour.budget },
     mention_fallback: (behaviour.mention_fallback ?? []).map((s) => s.trim()).filter(Boolean),
-    reactions: { allowed: (behaviour.reactions?.allowed ?? []).filter(Boolean) },
+    reactions: { ...behaviour.reactions, allowed: (behaviour.reactions?.allowed ?? []).filter(Boolean) },
+    decision: behaviour.decision ?? { questions: {}, rules: [] },
+    wake_prompts: behaviour.wake_prompts ?? {},
     jev: {
       timeout_seconds: Number(behaviour.jev?.timeout_seconds ?? 20),
       route: behaviour.jev?.route ?? [],
@@ -99,6 +106,21 @@ function HealthStrip({ health }: { health: HealthResponse }) {
       </CardContent>
     </Card>
   );
+}
+
+export function BehaviourPower({ enabled, dryRun, busy, onChange }: {
+  enabled: boolean; dryRun: boolean; busy: boolean; onChange: (enabled: boolean) => void;
+}) {
+  return <Card><CardContent className="py-4">
+    <div className="flex items-center justify-between gap-4">
+      <div><H2 className="text-base">Wake behaviour</H2>
+        <p className="mt-1 text-sm" role="status">{enabled ? dryRun ? "On · preview only" : "On" : "Off"}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Turn Jev wake calls, spontaneous messages, and automatic reactions on or off. Changes apply immediately.</p>
+      </div>
+      <Switch checked={enabled} disabled={busy} onCheckedChange={checked => onChange(checked === true)} aria-label="Enable wake behaviour" />
+    </div>
+    {busy && <p className="mt-2 text-xs text-muted-foreground" role="status">Updating wake behaviour…</p>}
+  </CardContent></Card>;
 }
 
 /**
@@ -248,12 +270,15 @@ export function WakePolicyCard({
   onSave: (updates: Record<string, unknown>) => void | Promise<boolean>;
 }) {
   const [dryRun, setDryRun] = useState(behaviour.dry_run !== false);
+  const [timing, setTiming] = useState({ settle_seconds: behaviour.settle_seconds ?? 10, poll_seconds: behaviour.poll_seconds ?? 3, stale_after_minutes: behaviour.stale_after_minutes ?? 15 });
   const [conversation, setConversation] = useState(behaviour.conversation);
   const [watchedChats, setWatchedChats] = useState((behaviour.watched_chats ?? []).join(", "));
   const [register, setRegister] = useState(behaviour.room_register ?? "");
   const [budget, setBudget] = useState<Record<string, number | null>>({ ...behaviour.budget });
   const [mentions, setMentions] = useState((behaviour.mention_fallback ?? []).join("\n"));
-  const [reactions, setReactions] = useState((behaviour.reactions?.allowed ?? []).join(" "));
+  const [reactions, setReactions] = useState(behaviour.reactions ?? { allowed: [] });
+  const [decision, setDecision] = useState(behaviour.decision ?? { questions: {}, rules: [] });
+  const [wakePrompts, setWakePrompts] = useState(behaviour.wake_prompts ?? {});
   const [route, setRoute] = useState((behaviour.jev?.route ?? []).join(", "));
   const [timeout, setTimeoutSeconds] = useState(Number(behaviour.jev?.timeout_seconds ?? 20));
   const [providers, setProviders] = useState(() =>
@@ -262,11 +287,6 @@ export function WakePolicyCard({
       base_url: entry.base_url ?? "",
       model: entry.model ?? "",
       api_key_env: entry.api_key_env ?? "",
-      // The backend accepts six keys per provider and replaces the map wholesale on write
-      // (`behaviour.py`: base_url, model, api_key_env, endpoint, instructions, tier). This form
-      // renders three of them, so the other three are carried verbatim. Dropping them meant any
-      // wake-policy save silently deleted a hand-written `endpoint`/`tier`/`instructions` from
-      // config.yaml — a regression introduced when the four save buttons were collapsed into one.
       extra: providerExtras(entry),
     })),
   );
@@ -297,21 +317,36 @@ export function WakePolicyCard({
     () => ({
       ...(conversation ? { conversation } : {}),
       dry_run: dryRun,
+      ...timing,
       room_register: register,
       watched_chats: watchedChats.split(/[\s,]+/).filter(Boolean),
       budget: { ...budget },
       mention_fallback: mentions.split("\n").map((s) => s.trim()).filter(Boolean),
-      reactions: { allowed: reactions.split(/\s+/).filter(Boolean) },
+      reactions,
+      decision,
+      wake_prompts: wakePrompts,
       jev,
     }),
     // `jev` is rebuilt on every render, so depend on the parts that actually build it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conversation, dryRun, register, watchedChats, budget, mentions, reactions, timeout, route, providers],
+    [conversation, timing, dryRun, register, watchedChats, budget, mentions, reactions, decision, wakePrompts, timeout, route, providers],
   );
 
   const baseline = useMemo(() => policyBaseline(behaviour), [behaviour]);
 
   const dirty = isDraftDirty(updates, baseline);
+  const providerNames = providers.map(p => p.name.trim());
+  const draftErrors = [
+    ...(providerNames.some(name => !name) ? ["Give every route a name."] : []),
+    ...(new Set(providerNames).size !== providerNames.length ? ["Route names must be unique."] : []),
+    ...(providers.some(p => !p.model.trim()) ? ["Choose a model for every route."] : []),
+    ...(jev.route.some(name => !providerNames.includes(name)) ? ["Route order includes an unknown route."] : []),
+    ...(decision.rules.some(r => !r.name.trim() || !r.instructions.trim() || !Number.isFinite(r.threshold) || r.threshold < 0 || r.threshold > 1) ? ["Complete each condition’s name, question, and probability between 0 and 1."] : []),
+    ...(Object.values(wakePrompts).some(p => !p.trim()) ? ["Enter a wake prompt or use its default."] : []),
+    ...(!Number.isFinite(timeout) || timeout < 1 || timeout > 60 ? ["The judgment deadline must be between 1 and 60 seconds."] : []),
+    ...(Object.entries(timing).some(([key, value]) => !Number.isInteger(value) || value < (key === "settle_seconds" ? 0 : 1) || value > (key === "settle_seconds" ? 600 : key === "poll_seconds" ? 300 : 1440)) ? ["Check the message timing limits."] : []),
+  ];
+  const saveDraft = async () => draftErrors.length ? false : (await onSave(updates)) !== false;
 
   useUnsavedChanges({
     id: "behaviour-wake-policy",
@@ -319,15 +354,18 @@ export function WakePolicyCard({
     dirty,
     // Returned, not discarded: the arrow body previously had no `return`, so `saveAll` received
     // `undefined`, resolved immediately, and the navigation ran while the PUT was still in flight.
-    onSave: async () => (await onSave(updates)) !== false,
+    onSave: saveDraft,
     onDiscard: () => {
       setConversation(baseline.conversation);
       setDryRun(baseline.dry_run);
+      setTiming({ settle_seconds: baseline.settle_seconds, poll_seconds: baseline.poll_seconds, stale_after_minutes: baseline.stale_after_minutes });
       setRegister(baseline.room_register);
       setWatchedChats(baseline.watched_chats.join(", "));
       setBudget({ ...baseline.budget });
       setMentions(baseline.mention_fallback.join("\n"));
-      setReactions(baseline.reactions.allowed.join(" "));
+      setReactions(baseline.reactions);
+      setDecision(baseline.decision);
+      setWakePrompts(baseline.wake_prompts);
       setRoute(baseline.jev.route.join(", "));
       setTimeoutSeconds(Number(baseline.jev.timeout_seconds ?? 20));
       setProviders(
@@ -345,27 +383,36 @@ export function WakePolicyCard({
   return (
     <Card>
       <CardContent className="p-5 md:p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <H2 className="text-base">Wake policy</H2>
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 bg-card py-2">
+          <H2 className="text-base">Define your companion’s behaviour</H2>
           {dirty && (
             <span className="text-xs text-warning" data-wake-policy-dirty>
-              unsaved changes &middot; one save writes all of it
+              Unsaved changes
             </span>
           )}
           <Button
             size="sm"
             className="ml-auto"
-            disabled={saving || !dirty}
-            onClick={() => onSave(updates)}
+            disabled={saving || !dirty || draftErrors.length > 0}
+            onClick={saveDraft}
             data-wake-policy-save
           >
             {saving ? "Saving\u2026" : "Save wake policy"}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Dry-run decides but never sends. Cooldowns and caps keep wakes rare; the route chain
-          is who judges (first healthy route answers).
+          Shape the decisions before a reply and the instructions that start it. Save all your changes together; they apply on the next evaluation.
         </p>
+        {dirty && draftErrors.length > 0 && <p role="alert" className="mt-3 text-sm text-destructive">{draftErrors.join(" ")}</p>}
+        <fieldset disabled={saving} className="min-w-0">
+        <div className="mt-4 flex flex-wrap gap-5 text-sm">
+          <label className="flex items-center gap-2"><input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)} />Preview decisions without sending</label>
+        </div>
+        <BehaviourEditors behaviour={behaviour} decision={decision} onDecision={setDecision}
+          reactions={reactions} onReactions={setReactions} prompts={wakePrompts} onPrompts={setWakePrompts} />
+
+        <details className="mt-5 border-t border-border pt-4">
+        <summary className="cursor-pointer text-base font-medium">Conversation, pacing & groups</summary>
 
         {conversation && (
           <fieldset className="my-5 space-y-3 rounded-xl border border-border p-4">
@@ -417,11 +464,12 @@ export function WakePolicyCard({
           </fieldset>
         )}
 
-        <div className="flex flex-wrap items-center gap-4 pt-3 text-sm">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-            dry-run (decide but never send)
-          </label>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {([
+            ["settle_seconds", "Let messages settle (seconds)", 0, 600],
+            ["poll_seconds", "Check for messages every (seconds)", 1, 300],
+            ["stale_after_minutes", "Ignore messages older than (minutes)", 1, 1440],
+          ] as const).map(([key, label, min, max]) => <label key={key} className="text-xs text-muted-foreground">{label}<input className={`${inputClass} mt-1 w-full`} type="number" min={min} max={max} step={1} value={timing[key]} onChange={e => setTiming({ ...timing, [key]: e.target.valueAsNumber })} /></label>)}
         </div>
         <label className="mt-2 block text-xs text-muted-foreground">
           room voice (how the room talks, which shapes the companion’s judgments)
@@ -474,77 +522,94 @@ export function WakePolicyCard({
               onChange={(e) => setMentions(e.target.value)}
             />
           </label>
-          <label className="text-xs text-muted-foreground">
-            allowed reaction emoji (space separated; empty = reactions off)
-            <input
-              className={`${inputClass} mt-1 w-full`}
-              value={reactions}
-              onChange={(e) => setReactions(e.target.value)}
-            />
-          </label>
         </div>
+        </details>
 
-        <div className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          jev route chain (names resolve into providers below)
-        </div>
+        <details className="mt-5 border-t border-border pt-4">
+        <summary className="cursor-pointer text-base font-medium">Jev models & routing</summary>
+        <p className="mt-2 text-sm text-muted-foreground">Choose who evaluates the prompts. The first active route answers; later routes handle temporary outages.</p>
         <label className="mt-1 block text-xs text-muted-foreground">
           route order (comma separated)
           <input className={`${inputClass} mt-1 w-full max-w-xl`} value={route} onChange={(e) => setRoute(e.target.value)} />
         </label>
         <div className="mt-2 space-y-1">
           {providers.map((provider, index) => (
-            <div key={index} className="flex flex-col gap-2 rounded-xl border border-border p-3 sm:flex-row sm:flex-wrap sm:items-center sm:border-0 sm:p-0">
+            <fieldset key={index} className="space-y-3 rounded-xl border border-border p-4">
+              <legend className="px-1 text-sm font-medium">{provider.name || "New route"}</legend>
+              <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={jev.route.includes(provider.name)} onChange={e => setRoute((e.target.checked ? [...jev.route, provider.name] : jev.route.filter(name => name !== provider.name)).join(", "))} />Use this route</label>
+              {([[-1, ArrowUp, "earlier"], [1, ArrowDown, "later"]] as const).map(([offset, Icon, direction]) => <Button key={direction} ghost size="sm" aria-label={`Move ${provider.name} ${direction}`} disabled={!jev.route.includes(provider.name) || jev.route.indexOf(provider.name) + offset < 0 || jev.route.indexOf(provider.name) + offset >= jev.route.length} onClick={() => {
+                const next = [...jev.route]; const position = next.indexOf(provider.name);
+                [next[position], next[position + offset]] = [next[position + offset], next[position]]; setRoute(next.join(", "));
+              }}><Icon className="h-4 w-4" /></Button>)}
+              <span className="text-xs text-muted-foreground">{jev.route.includes(provider.name) ? `Priority ${jev.route.indexOf(provider.name) + 1}` : "Inactive"}</span>
+              <Button ghost size="sm" className="ml-auto" aria-label={`Remove route ${provider.name}`} onClick={() => { setProviders(providers.filter((_, i) => i !== index)); setRoute(jev.route.filter(name => name !== provider.name).join(", ")); }}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-muted-foreground">Route name
               <input
-                className={`${inputClass} w-full font-mono sm:w-36`}
+                className={`${inputClass} mt-1 w-full`}
                 placeholder="name"
                 value={provider.name}
-                onChange={(e) =>
-                  setProviders(providers.map((p, i) => (i === index ? { ...p, name: e.target.value } : p)))
-                }
-              />
+                onChange={(e) => { setRoute(jev.route.map(name => name === provider.name ? e.target.value : name).join(", ")); setProviders(providers.map((p, i) => (i === index ? { ...p, name: e.target.value } : p))); }}
+              /></label>
+              <label className="text-xs text-muted-foreground">Base URL
               <input
-                className={`${inputClass} w-full font-mono sm:w-64`}
+                className={`${inputClass} mt-1 w-full`}
                 placeholder="base_url"
                 value={provider.base_url}
                 onChange={(e) =>
                   setProviders(providers.map((p, i) => (i === index ? { ...p, base_url: e.target.value } : p)))
                 }
-              />
+              /></label>
+              <label className="text-xs text-muted-foreground">Model
               <input
-                className={`${inputClass} w-full font-mono sm:w-40`}
+                className={`${inputClass} mt-1 w-full`}
                 placeholder="model"
                 value={provider.model}
                 onChange={(e) =>
                   setProviders(providers.map((p, i) => (i === index ? { ...p, model: e.target.value } : p)))
                 }
-              />
+              /></label>
+              <label className="text-xs text-muted-foreground">API key environment variable
               <input
-                className={`${inputClass} w-full font-mono sm:w-48`}
+                className={`${inputClass} mt-1 w-full`}
                 placeholder="api_key_env"
                 value={provider.api_key_env}
                 onChange={(e) =>
                   setProviders(providers.map((p, i) => (i === index ? { ...p, api_key_env: e.target.value } : p)))
                 }
-              />
-              <Button ghost
-                size="sm"
-                onClick={() => setProviders(providers.filter((_, i) => i !== index))}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+              /></label>
+              {(["endpoint", "tier", "timeout_seconds"] as const).map(key => <label key={key} className="text-xs text-muted-foreground">{key === "endpoint" ? "Endpoint override (optional URL)" : key === "tier" ? "Cost tier (free, local, paid; blank = automatic)" : "Route timeout (seconds; optional)"}
+                <input className={`${inputClass} mt-1 w-full`} type={key === "timeout_seconds" ? "number" : "text"} min={0.1} max={60} step={0.1} value={String(provider.extra[key] ?? "")} onChange={e => setProviders(providers.map((p, i) => {
+                  if (i !== index) return p;
+                  const extra = { ...p.extra };
+                  if (!e.target.value) delete extra[key]; else extra[key] = key === "timeout_seconds" ? Number(e.target.value) : e.target.value;
+                  return { ...p, extra };
+                }))} /></label>)}
+              </div>
+              <label className="block text-xs text-muted-foreground">Instructions for this route (prepended to every judgment)
+                <textarea className={`${inputClass} mt-1 min-h-24 w-full resize-y`} maxLength={12000} value={String(provider.extra.instructions ?? "")} onChange={e => setProviders(providers.map((p, i) => {
+                  if (i !== index) return p;
+                  const extra = { ...p.extra }; if (e.target.value) extra.instructions = e.target.value; else delete extra.instructions;
+                  return { ...p, extra };
+                }))} /></label>
+            </fieldset>
           ))}
         </div>
         <div className="mt-2 flex items-center gap-2">
           <Button outlined
             size="sm"
-            onClick={() =>
+            onClick={() => {
+              let name = "route"; let suffix = 1;
+              while (providerNames.includes(name)) name = `route-${suffix++}`;
+              setRoute([...jev.route, name].join(", "));
               setProviders([
                 ...providers,
                 // `extra` is empty for a newly-added route; a fresh entry has nothing to preserve.
-                { name: "", base_url: "", model: "", api_key_env: "", extra: {} },
-              ])
-            }
+                { name, base_url: "", model: "", api_key_env: "", extra: {} },
+              ]);
+            }}
           >
             <Plus className="mr-1 h-3.5 w-3.5" /> Add route
           </Button>
@@ -558,6 +623,8 @@ export function WakePolicyCard({
             />
           </label>
         </div>
+        </details>
+        </fieldset>
       </CardContent>
     </Card>
   );
@@ -629,6 +696,7 @@ export default function BehaviourPage() {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [policyKey, setPolicyKey] = useState(0);
   const [replaying, setReplaying] = useState(false);
   const { toast, showToast } = useToast();
@@ -741,6 +809,22 @@ export default function BehaviourPage() {
     }
   };
 
+  const setWakeService = async (enabled: boolean) => {
+    setToggling(true);
+    try {
+      const result = await lunaApi.saveBehaviour({ enabled }, behaviour?.revision);
+      const rejected = Object.values(result.results ?? {}).find(row => !row.ok);
+      if (rejected) throw new Error(rejected.error || "Could not update wake behaviour");
+      // Keep the editor mounted so a power toggle cannot erase an unrelated draft.
+      setBehaviour(result.behaviour);
+      showToast(enabled ? "Wake behaviour turned on" : "Wake behaviour turned off", "success");
+    } catch (e) {
+      showToast(errorMessage(e), "error");
+    } finally {
+      setToggling(false);
+    }
+  };
+
   const runReplay = async () => {
     setReplaying(true);
     try {
@@ -766,10 +850,13 @@ export default function BehaviourPage() {
       <header className="relative overflow-hidden rounded-3xl border border-border/70 bg-card px-6 py-8 md:px-8 md:py-10">
         <BlossomBranch className="pointer-events-none absolute right-0 top-0 hidden w-80 opacity-40 lg:block" />
         <div className="relative max-w-3xl">
-          <H2 className="max-w-xl text-3xl font-normal lg:text-4xl">Make space for the right moment.</H2>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">Tune when your companion joins a group conversation, how they handle reactions, and which decisions stay quiet. Silence remains the default.</p>
+          <H2 className="max-w-xl text-3xl font-normal lg:text-4xl">Their instincts. Your words.</H2>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">Write the prompts, build a reaction palette, and define when your companion speaks up. Every judgment has room for your own rules.</p>
         </div>
       </header>
+
+      {behaviour && <BehaviourPower enabled={behaviour.enabled === true} dryRun={behaviour.dry_run === true}
+        busy={toggling || savingPolicy} onChange={setWakeService} />}
 
       {health && <HealthStrip health={health} />}
 
@@ -777,7 +864,7 @@ export default function BehaviourPage() {
         <WakePolicyCard
           key={policyKey}
           behaviour={behaviour}
-          saving={savingPolicy}
+          saving={savingPolicy || toggling}
           onSave={savePolicy}
         />
       )}

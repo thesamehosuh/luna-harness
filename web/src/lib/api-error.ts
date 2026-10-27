@@ -51,6 +51,16 @@ export function extractDetail(body: string): string | null {
               .filter((m): m is string => typeof m === "string");
             if (msgs.length) return msgs.join("; ");
           }
+          // Luna's atomic forms return a map of per-field validation results.
+          if (value && typeof value === "object" && !Array.isArray(value)) {
+            const errors = Object.entries(value).flatMap(([field, result]) => {
+              if (!result || typeof result !== "object") return [];
+              const row = result as { ok?: unknown; error?: unknown };
+              return row.ok === false && typeof row.error === "string" && row.error.trim()
+                ? [`${field}: ${row.error.trim()}`] : [];
+            });
+            if (errors.length) return errors.join("; ");
+          }
         }
       }
       return null;

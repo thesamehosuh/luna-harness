@@ -54,6 +54,17 @@ def test_write_dry_run_and_budget(home):
     assert "# top" in (home / "config.yaml").read_text(encoding="utf-8")
 
 
+def test_master_switch_settles_onboarding_and_retains_customizations(home):
+    from luna_core.config_read import load_config
+    behaviour.write_behaviour({"wake_prompts": {"message": "Keep it brief."}})
+    for enabled in (True, False, True):
+        result = behaviour.write_behaviour({"enabled": enabled})
+        assert result["results"]["enabled"]["ok"]
+        assert result["behaviour"]["enabled"] is enabled
+        assert result["behaviour"]["wake_prompts"]["message"] == "Keep it brief."
+        assert load_config()["luna"]["setup"]["jev"] == ("enabled" if enabled else "skipped")
+
+
 def test_write_mentions_and_reactions(home):
     result = behaviour.write_behaviour({
         "mention_fallback": ["(?i)\\bluna\\b"],
@@ -96,6 +107,46 @@ def test_unknown_and_bad_types_refused(home):
     assert not result["results"]["nope"]["ok"]
     assert not result["results"]["poll_seconds"]["ok"]
     assert not result["results"]["enabled"]["ok"]
+
+
+def test_customizations_roundtrip_and_removal(home):
+    rule = {"id": "interests", "name": "My interests", "instructions": "Is this about music?",
+            "action": "message", "enabled": True, "threshold": 0.8}
+    updates = {
+        "decision": {"questions": {"message_would_fit": {"instructions": "Would a music tip help?"}}, "rules": [rule]},
+        "reactions": {"allowed": ["💜"], "criteria": {"💜": "gentle support"}},
+        "wake_prompts": {"message": "Offer one {contribution_type}.", "directed": "Answer the selected person."},
+    }
+    result = behaviour.write_behaviour(updates)
+    assert all(row["ok"] for row in result["results"].values())
+    for key, value in updates.items():
+        assert result["behaviour"][key] == value
+    assert result["behaviour"]["question_defaults"]
+    assert result["behaviour"]["wake_prompt_defaults"]["message"]
+    reset = behaviour.write_behaviour({"decision": {"questions": {}, "rules": []}, "reactions": {"allowed": [], "criteria": {}}, "wake_prompts": {}})
+    assert reset["behaviour"]["decision"]["rules"] == []
+    assert reset["behaviour"]["reactions"]["allowed"] == []
+    assert reset["behaviour"]["wake_prompts"] == {}
+    assert "# top" in (home / "config.yaml").read_text()
+
+
+@pytest.mark.parametrize("updates", [
+    {"decision": {"questions": {"private": {"instructions": ""}}}},
+    {"decision": {"questions": {"made_up": {"instructions": "hello"}}}},
+    {"decision": {"questions": {"private": {"criteria": {"true": "yes"}}}}},
+    {"decision": {"rules": [{"id": "a", "name": "A", "instructions": "OK?", "threshold": float("nan") }]}},
+    {"decision": {"rules": [{"id": "a", "name": "A", "instructions": "OK?", "action": "shell"}]}},
+    {"wake_prompts": {"message": ""}},
+    {"wake_prompts": {"other": "prompt"}},
+    {"reactions": {"allowed": [123]}},
+    {"reactions": {"allowed": [], "criteria": {"👍": []}}},
+    {"jev": {"route": ["a"], "providers": {"a": {"model": "m", "instructions": []}}}},
+])
+def test_bad_customization_keeps_entire_draft_unchanged(home, updates):
+    before = (home / "config.yaml").read_text()
+    result = behaviour.write_behaviour({"room_register": "should not write", **updates})
+    assert not any(row["ok"] for row in result["results"].values())
+    assert (home / "config.yaml").read_text() == before
 
 
 def test_conversation_save_reads_staged_values_and_preserves_other_fields(home):

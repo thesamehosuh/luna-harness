@@ -1,3 +1,9 @@
+# Luna 0.1.0-alpha.9
+
+- Rework Behaviour with editable Jev prompts, answer rubrics, reaction palettes and meanings, wake prompts, and custom conditions.
+- Add an immediate on/off switch for wake behaviour and controls for model routes and pacing.
+- Fix saving watched groups and show the specific reason when a settings save is rejected.
+
 # Luna 0.1.0-alpha.8
 
 - Reset stale context usage after deferred group-chat summaries commit, avoiding repeated compression notices.

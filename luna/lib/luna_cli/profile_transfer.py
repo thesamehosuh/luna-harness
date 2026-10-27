@@ -140,7 +140,7 @@ def validate_bundle(bundle):
     def check(node, prefix=""):
         for key, value in node.items():
             dotted = f"{prefix}.{key}" if prefix else key
-            if isinstance(value, dict) and dotted in CONFIG_SCHEMA and dotted != "model":
+            if isinstance(value, dict) and dotted in CONFIG_SCHEMA and dotted != "model" and CONFIG_SCHEMA[dotted]["type"] != "object":
                 raise ValueError(f"Invalid object value for {dotted}")
             if isinstance(value, dict):
                 check(value, dotted)

@@ -30,15 +30,20 @@ def _conversation():
 
 @settings.transactional
 def behaviour_bundle() -> Dict[str, Any]:
+    from luna_core.config_read import with_defaults
     ambient = _ambient()
     budget = ambient.get("budget") if isinstance(ambient.get("budget"), dict) else {}
     from luna_core.wakes import WakePolicy
-    budget = {**WakePolicy().as_dict(), **budget}
+    # Obsolete keys in older profiles are not runtime knobs. Re-emitting them made an
+    # unrelated group selection fail validation when the dashboard saved its whole draft.
+    budget = {name: budget.get(name, default) for name, default in WakePolicy().as_dict().items()}
     for name, value in budget.items():
         if value == 1000000000 and (name.endswith("max_per_day") or name.endswith("max_per_week")):
             budget[name] = None
     reactions = ambient.get("reactions") if isinstance(ambient.get("reactions"), dict) else {}
     jev = ambient.get("jev") if isinstance(ambient.get("jev"), dict) else {}
+    from luna_core.cascade import build_questions, REACTION_CRITERIA
+    from luna_core.behaviour_policy import WAKE_PROMPTS
     providers = jev.get("providers") if isinstance(jev.get("providers"), dict) else {}
     from luna_core.room_dispatch import BOUNDS
     from luna_cli.conversation_status import report
@@ -54,7 +59,9 @@ def behaviour_bundle() -> Dict[str, Any]:
         "conversation": _conversation().__dict__,
         "conversation_bounds": BOUNDS,
         "conversation_status": report(),
-        "enabled": ambient.get("enabled"),
+        "enabled": bool(ambient.get("enabled")) and configedit.read_config_value(
+            with_defaults(raw),
+            ["luna", "setup", "jev"]) in (None, "enabled"),
         "watched_chats": list(watched),
         "available_chats": list(dict.fromkeys([str(item) for item in (raw.get("telegram") or {}).get("group_allowed_chats", [])]
                                 + ([str(((raw.get("luna") or {}).get("room") or {}).get("chat_id"))]
@@ -66,7 +73,12 @@ def behaviour_bundle() -> Dict[str, Any]:
         "stale_after_minutes": ambient.get("stale_after_minutes"),
         "budget": budget,
         "mention_fallback": list(ambient.get("mention_fallback") or []),
-        "reactions": {"allowed": list(reactions.get("allowed") or [])},
+        "reactions": {"allowed": list(reactions.get("allowed") or []), "criteria": dict(reactions.get("criteria") or {})},
+        "reaction_defaults": REACTION_CRITERIA,
+        "decision": ambient.get("decision") or {"questions": {}, "rules": []},
+        "question_defaults": build_questions(list(REACTION_CRITERIA)),
+        "wake_prompts": dict(ambient.get("wake_prompts") or {}),
+        "wake_prompt_defaults": WAKE_PROMPTS,
         "jev": {
             "timeout_seconds": jev.get("timeout_seconds"),
             "route": list(jev.get("route") or []),
@@ -77,7 +89,8 @@ def behaviour_bundle() -> Dict[str, Any]:
 
 # Writes: partial update; each accepted top-level key is one surgical config write.
 _ACCEPTED = ("enabled", "dry_run", "room_register", "settle_seconds", "poll_seconds",
-             "stale_after_minutes", "watched_chats", "budget", "mention_fallback", "reactions", "jev", "conversation")
+             "stale_after_minutes", "watched_chats", "budget", "mention_fallback", "reactions", "jev", "conversation",
+             "decision", "wake_prompts")
 
 _NUM_BOUNDS = {
     "settle_seconds": (0, 600),
@@ -100,6 +113,9 @@ def write_behaviour(updates: Dict[str, Any]) -> Dict[str, Any]:
             value = _validated(key, value)
             path = ["luna", "conversation"] if key == "conversation" else ["luna", "ambient", key]
             text = configedit.write_config_value(text, path, value)
+            if key == "enabled":
+                # The explicit master switch also settles the optional onboarding gate.
+                text = configedit.write_config_value(text, ["luna", "setup", "jev"], "enabled" if value else "skipped")
             results[key] = {"ok": True}
             wrote = True
         except configedit.ConfigEditError as exc:
@@ -114,6 +130,17 @@ def write_behaviour(updates: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _validated(key: str, value: Any) -> Any:
+    if key in ("decision", "wake_prompts"):
+        from luna_core.behaviour_policy import validate_policy, text as validate_text, WAKE_PROMPTS
+        from luna_core.cascade import build_questions, REACTION_CRITERIA
+        try:
+            if key == "decision":
+                return validate_policy(value, build_questions(list(REACTION_CRITERIA)))
+            if not isinstance(value, dict) or set(value) - set(WAKE_PROMPTS):
+                raise ValueError("wake_prompts expects directed and message prompts")
+            return {k: validate_text(v, k) for k, v in value.items()}
+        except ValueError as exc:
+            raise configedit.ConfigEditError(str(exc)) from exc
     if key == "watched_chats":
         if not isinstance(value, list) or len(value) > 100 or any(not isinstance(item, str) or not item.strip() for item in value):
             raise configedit.ConfigEditError("watched_chats expects up to 100 group IDs")
@@ -159,9 +186,12 @@ def _validated(key: str, value: Any) -> Any:
         if not isinstance(value, dict):
             raise configedit.ConfigEditError("reactions expects a mapping")
         allowed = value.get("allowed", [])
-        if not isinstance(allowed, list):
-            raise configedit.ConfigEditError("reactions.allowed expects a list")
-        return {"allowed": [str(x) for x in allowed if str(x).strip()]}
+        if not isinstance(allowed, list) or len(allowed) > 100 or any(not isinstance(x, str) or not x.strip() or len(x) > 32 for x in allowed):
+            raise configedit.ConfigEditError("reactions.allowed expects up to 100 emoji strings")
+        criteria = value.get("criteria", {})
+        if not isinstance(criteria, dict) or len(criteria) > 100 or any(not isinstance(k, str) or not isinstance(v, str) or len(k) > 32 or len(v) > 12000 for k, v in criteria.items()):
+            raise configedit.ConfigEditError("reactions.criteria expects emoji descriptions")
+        return {"allowed": list(dict.fromkeys(allowed)), "criteria": criteria}
     if key == "budget":
         if not isinstance(value, dict):
             raise configedit.ConfigEditError("budget expects a mapping")
@@ -219,10 +249,14 @@ def _validated_jev(value: Any) -> Dict[str, Any]:
         out["timeout_seconds"] = timeout
     clean_providers: Dict[str, Any] = {}
     for name, entry in providers.items():
+        if not isinstance(name, str) or not name.strip():
+            raise configedit.ConfigEditError("Providers need non-empty names")
         if not isinstance(entry, dict):
             raise configedit.ConfigEditError(f"jev.providers.{name} must be a mapping")
         if not str(entry.get("model") or "").strip():
             raise configedit.ConfigEditError(f"jev.providers.{name} needs a model")
+        if "instructions" in entry and (not isinstance(entry["instructions"], str) or len(entry["instructions"]) > 12000):
+            raise configedit.ConfigEditError(f"jev.providers.{name}.instructions expects up to 12000 characters")
         if "timeout_seconds" in entry:
             value_timeout = entry["timeout_seconds"]
             if type(value_timeout) not in (int, float) or not 0 < value_timeout <= 60:

@@ -279,6 +279,15 @@ def _regex_fallback_decision(conn: sqlite3.Connection, chat_id: str, *,
     "never double-answer" guards as :func:`_candidate`; the substantive-text gate is skipped
     because an explicit mention is substantive by definition. No patterns configured = no fallback.
     """
+    # A Jev outage cannot establish a user-authored yes/no condition.
+    from luna_core.behaviour_policy import validate_policy
+    from luna_core.cascade import build_questions, REACTION_CRITERIA
+    try:
+        policy = validate_policy(_cfg("ambient.decision", {}) or {}, build_questions(list(REACTION_CRITERIA)))
+    except ValueError:
+        return None
+    if any(rule["enabled"] and rule["action"] in ("message", "both") for rule in policy["rules"]):
+        return None
     patterns = _mention_fallback_patterns()
     if not patterns:
         return None
@@ -794,6 +803,8 @@ def evaluate(conn: sqlite3.Connection, chat_id: str, *, now: Optional[datetime] 
         now=now,
         reactions_enabled=bool(allowed),
         allowed_reactions=allowed,
+        decision_policy=_cfg("ambient.decision", {}),
+        reaction_criteria=_cfg("ambient.reactions.criteria", {}),
         room_register=_cfg("ambient.room_register"),
         before_jev=None if operation is not None else reserve_attempt,
         extra_state={"luna_recent_activity": _luna_recent_activity(conn, chat_id, now)},
@@ -928,10 +939,8 @@ def _wake_brief(conn: sqlite3.Connection, chat_id: str, decision) -> str:
         background = build_room_block(
             conn, chat_id, max_lines=5, max_chars=700, thread_id=topic,
         ).text if _has_other_messages(conn, chat_id, target) else ""
-        head = ("[Someone in the group is talking to you. Reply to the message below and nothing "
-                "else. The later \"Room background\" section is just the room around it — it is not "
-                "what you were asked about. If it does not need an answer, return exactly NO_REPLY; "
-                "never answer someone else instead.]")
+        from luna_core.behaviour_policy import DIRECTED_PROMPT
+        head = _cfg("ambient.wake_prompts.directed") or DIRECTED_PROMPT
         parts = [head, "", "The message you are replying to:"]
         if reply_line:
             parts.append(reply_line)
@@ -940,8 +949,8 @@ def _wake_brief(conn: sqlite3.Connection, chat_id: str, decision) -> str:
         return "\n".join(parts)
 
     block = build_room_block(conn, chat_id, current_message_id=target, max_lines=6, max_chars=900, thread_id=topic)
-    head = (f"[A moment in the group you could join ({decision.contribution_type}). "
-            "Speak only if you actually have something to add.]")
+    from luna_core.behaviour_policy import MESSAGE_PROMPT
+    head = (_cfg("ambient.wake_prompts.message") or MESSAGE_PROMPT).replace("{contribution_type}", decision.contribution_type)
     return head + "\n" + block.text
 
 

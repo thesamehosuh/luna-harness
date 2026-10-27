@@ -728,6 +728,31 @@ def test_ambient_brief_keeps_room_context(ambient):
     assert "The message you are replying to:" not in brief
 
 
+def test_dashboard_authored_wake_prompts_reach_briefs(ambient, monkeypatch):
+    mod, conn = ambient
+    from luna_cli.behaviour import write_behaviour
+    from luna_core.cascade import Decision
+    # The dashboard transaction and runtime use the same isolated profile.
+    from luna_core.runtime import home
+    monkeypatch.setenv("LUNA_HOME", str(home()))
+    result = write_behaviour({"wake_prompts": {"directed": "Answer with warmth.", "message": "Offer {contribution_type}; keep {literal} intact."}})
+    assert result["results"]["wake_prompts"]["ok"]
+    directed = mod._wake_brief(conn, CHAT, Decision(action="message", directed=True, target_message_id="m3"))
+    assert directed.startswith("Answer with warmth.")
+    assert "The message you are replying to:" in directed
+    assert "Room background (context only, do not reply to these):" in directed
+    spontaneous = mod._wake_brief(conn, CHAT, Decision(action="message", target_message_id="m3", contribution_type="humor"))
+    assert spontaneous.startswith("Offer humor; keep {literal} intact.")
+
+
+def test_outage_fallback_does_not_bypass_custom_text_conditions(ambient, monkeypatch):
+    mod, conn = ambient
+    previous = mod._cfg
+    monkeypatch.setattr(mod, "_cfg", lambda key, default=None: {"rules": [{"id": "music", "name": "Music", "instructions": "Music?", "action": "message"}]} if key == "ambient.decision" else previous(key, default))
+    monkeypatch.setattr(mod, "_mention_fallback_patterns", lambda: pytest.fail("Must not fall back without judging the condition"))
+    assert mod._regex_fallback_decision(conn, CHAT, now=NOW) is None
+
+
 def test_settle_gate_defers_a_brand_new_message(ambient, monkeypatch):
     """A message that just arrived is not worth a jev call yet, and must not be lost."""
     mod, conn = ambient

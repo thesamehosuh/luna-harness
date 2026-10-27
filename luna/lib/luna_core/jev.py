@@ -485,8 +485,8 @@ class JevClient:
         self.backoff = backoff
         self._transport = transport
         self._sleep = sleep
-        # Some hosts (OpenRouter's /api/alpha/decisions) require an `instructions` field on every
-        # question. Left None for TypeSafe/Zen, whose payload must stay byte-identical.
+        # Optional route-level guidance precedes each question's own rubric. Unconfigured
+        # TypeSafe/Zen requests retain their original shape.
         self.instructions = instructions
         self.last_usage: Optional[Dict[str, Any]] = None
         self.operation = operation
@@ -499,8 +499,8 @@ class JevClient:
         for spec in questions:
             spec = dict(spec)
             qid = spec.pop("id")
-            if self.instructions and "instructions" not in spec:
-                spec["instructions"] = self.instructions
+            if self.instructions:
+                spec["instructions"] = self.instructions + ("\n\n" + spec["instructions"] if spec.get("instructions") else "")
             qmap[qid] = spec
         return {"model": self.model, "state": state, "questions": qmap}
 

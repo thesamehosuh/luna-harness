@@ -18,7 +18,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactNode } from "react";
 
-import { ThresholdRow, WakePolicyCard } from "./BehaviourPage";
+import { BehaviourPower, ThresholdRow, WakePolicyCard } from "./BehaviourPage";
 import { unsavedRegistry } from "@/lib/dirty-registry";
 import type { BehaviourBundle, ThresholdValue } from "@/lib/luna-api";
 
@@ -244,11 +244,91 @@ const registerArea = (c: HTMLElement) =>
     (ta.closest("label")?.textContent ?? "").includes("room voice"),
   )!;
 
+function editableBundle(): BehaviourBundle {
+  return { ...bundle(), decision: { questions: {}, rules: [] },
+    reactions: { allowed: ["💜"], criteria: { "💜": "support" } },
+    reaction_defaults: { "👍": "agreement" },
+    wake_prompts: {}, wake_prompt_defaults: { directed: "Answer this person.", message: "Join with {contribution_type}." },
+    question_defaults: [{ id: "message_would_fit", type: "noul", instructions: "Would a reply help?", criteria: { true: "welcome", false: "intrusive" } }],
+  };
+}
+
+describe("Behaviour customization", () => {
+  it("shows an immediate accessible power switch with preview status", async () => {
+    const onChange = vi.fn();
+    await render(<BehaviourPower enabled={false} dryRun={true} busy={false} onChange={onChange} />);
+    expect(container.textContent).toContain("Off");
+    await act(async () => container.querySelector<HTMLButtonElement>('[role="switch"]')!.click());
+    expect(onChange).toHaveBeenCalledWith(true);
+    await act(async () => root.render(<BehaviourPower enabled={true} dryRun={true} busy={true} onChange={onChange} />));
+    expect(container.textContent).toContain("On · preview only");
+    expect(container.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled).toBe(true);
+  });
+
+  it("keeps new defaults clean and saves prompts, rubrics, emoji meanings, and conditions together", async () => {
+    const onSave = vi.fn();
+    await render(<WakePolicyCard behaviour={editableBundle()} saving={false} onSave={onSave} />);
+    expect(unsavedRegistry.isDirty()).toBe(false);
+    const field = (name: string) => [...container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")].find(el => el.closest("label")?.textContent?.includes(name))!;
+    await act(async () => setInputValue(field("When to use"), "quiet encouragement"));
+    await act(async () => buttonWith(container, "Wake prompts")!.click());
+    await act(async () => setInputValue(container.querySelector<HTMLTextAreaElement>("#wake-message")!, "Offer one useful thought."));
+    await act(async () => buttonWith(container, "Jev judgments")!.click());
+    await act(async () => setInputValue(field("Question prompt"), "Would music advice help?"));
+    await act(async () => setInputValue(field("true"), "a welcome music tip"));
+    await act(async () => buttonWith(container, "Custom conditions")!.click());
+    await act(async () => buttonWith(container, "Add condition")!.click());
+    expect(container.querySelector<HTMLButtonElement>("[data-wake-policy-save]")!.disabled).toBe(true);
+    expect(await unsavedRegistry.saveAll()).toBe(false);
+    await act(async () => setInputValue(field("Condition name"), "Music"));
+    await act(async () => setInputValue(field("Question Jev"), "Is candidate.text about music?"));
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-wake-policy-save]")!.click());
+    const patch = onSave.mock.calls[0][0];
+    expect(patch.reactions.criteria["💜"]).toBe("quiet encouragement");
+    expect(patch.wake_prompts.message).toBe("Offer one useful thought.");
+    expect(patch.decision.questions.message_would_fit).toEqual({ instructions: "Would music advice help?", criteria: { true: "a welcome music tip", false: "intrusive" } });
+    expect(patch.decision.rules[0]).toMatchObject({ name: "Music", instructions: "Is candidate.text about music?", action: "both", enabled: true });
+  });
+
+  it("adds and removes reactions and conditions and restores prompt defaults", async () => {
+    const onSave = vi.fn();
+    await render(<WakePolicyCard behaviour={editableBundle()} saving={false} onSave={onSave} />);
+    await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[placeholder="Paste an emoji"]')!, "🌸"));
+    await act(async () => buttonWith(container, "Add reaction")!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label^="Remove reaction"]')!.click());
+    await act(async () => buttonWith(container, "Custom conditions")!.click());
+    await act(async () => buttonWith(container, "Add condition")!.click());
+    await act(async () => buttonWith(container, "Remove condition")!.click());
+    await act(async () => buttonWith(container, "Wake prompts")!.click());
+    await act(async () => setInputValue(container.querySelector<HTMLTextAreaElement>("#wake-message")!, "Changed"));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Reset message wake prompt"]')!.click());
+    expect(container.querySelector<HTMLTextAreaElement>("#wake-message")!.value).toBe("Join with {contribution_type}.");
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-wake-policy-save]")!.click());
+    expect(onSave.mock.calls[0][0].reactions).toEqual({ allowed: ["🌸"], criteria: {} });
+    expect(onSave.mock.calls[0][0].decision.rules).toEqual([]);
+    expect(onSave.mock.calls[0][0].wake_prompts).toEqual({});
+  });
+
+  it("removes routes from the fallback order and keeps a draft through a power change", async () => {
+    const onSave = vi.fn();
+    const data = editableBundle();
+    await render(<WakePolicyCard behaviour={data} saving={false} onSave={onSave} />);
+    await act(async () => setInputValue(registerArea(container), "my voice"));
+    await act(async () => root.render(<WakePolicyCard behaviour={{ ...data, enabled: false, revision: "new" }} saving={false} onSave={onSave} />));
+    expect(registerArea(container).value).toBe("my voice");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Remove route local"]')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-wake-policy-save]")!.click());
+    expect(onSave.mock.calls[0][0].jev.route).toEqual(["cloud"]);
+    expect(onSave.mock.calls[0][0].jev.providers).not.toHaveProperty("local");
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("enabled");
+  });
+});
+
 describe("WakePolicyCard has one save, not four", () => {
   it("saves explicit watched groups and supports clearing the last selection", async () => {
     const onSave = vi.fn();
     await render(<WakePolicyCard behaviour={{ ...bundle(), watched_chats: ["test-room"], available_chats: ["test-room", "other-room"] }} saving={false} onSave={onSave} />);
-    const field = [...container.querySelectorAll("fieldset")].find((el) => el.textContent?.includes("Groups where"))!;
+    const field = [...container.querySelectorAll("fieldset")].find((el) => el.querySelector(":scope > legend")?.textContent?.includes("Groups where"))!;
     const checks = [...field.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
     expect(checks.map((el) => el.checked)).toEqual([true, false]);
     await act(async () => checks[0].click());

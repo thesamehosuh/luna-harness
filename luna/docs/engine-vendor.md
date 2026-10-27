@@ -153,6 +153,13 @@ Endpoint tests: `tests/hermes_cli/test_web_luna_routes.py`; model/schema tests: 
 
 ## Not engine edits
 
+Behaviour customization extends `web/src/pages/BehaviourPage.tsx` and `web/src/lib/luna-api.ts`
+with prompt/rubric editors, reaction meanings, removable conditions, route controls, and an
+immediate master switch. `web/src/components/BehaviourEditors.tsx` contains the authoring UI.
+`web/src/lib/api-error.ts` also reads per-field Luna validation results so failed settings saves
+show their actual cause. The runtime policy, HTTP request fields, and group-save fixes live in
+the `luna/` overlay; regression coverage includes real dashboard HTTP requests.
+
 Everything under `luna/` (plugins, `luna_core`, config templates, persona, deploy, tests,
 docs) is product code and is not tracked here. `web/` dashboard extensions are product code
 even when they live under engine paths — they are listed when they patch engine modules.
