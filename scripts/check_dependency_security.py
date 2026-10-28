@@ -16,6 +16,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     failures = []
+    # Documentation SVG tooling needs a local deepmerge backport until upstream
+    # publishes a fix. Audit the selected source rather than exempting its advisory.
+    merge = ROOT / "website/vendor/deepmerge"
+    website_lock = json.loads((ROOT / "website/package-lock.json").read_text())
+    selected_merge = website_lock["packages"].get("node_modules/deepmerge", {})
+    if (hashlib.sha256((merge / "index.cjs").read_bytes()).hexdigest()
+            != "3cecbfdf70ac6c55f7c87ae9d29e1e3f0fd7902a47d2a88ee96d9a75fcff642f"
+            or selected_merge.get("resolved") != "vendor/deepmerge" or not selected_merge.get("link")):
+        failures.append("Documentation deepmerge security backport")
+    if subprocess.run(["node", "--test", str(merge / "security.test.cjs")], cwd=ROOT).returncode:
+        failures.append("Documentation deepmerge regressions")
     packages = collections.defaultdict(list)
     for package in tomllib.loads((ROOT / "uv.lock").read_text())["package"]:
         if "registry" in package.get("source", {}):

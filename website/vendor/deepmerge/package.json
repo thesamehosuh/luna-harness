@@ -1,0 +1,8 @@
+{
+  "name": "@luna/deepmerge",
+  "version": "4.3.1-luna.1",
+  "description": "deepmerge 4.3.1 with a local prototype-poisoning backport",
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "license": "MIT"
+}

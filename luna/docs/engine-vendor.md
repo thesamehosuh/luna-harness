@@ -153,6 +153,12 @@ Endpoint tests: `tests/hermes_cli/test_web_luna_routes.py`; model/schema tests: 
 
 ## Not engine edits
 
+`website/vendor/deepmerge/` retains the upstream MIT license and applies a tested local
+prototype-poisoning backport for the documentation SVG toolchain. The website override and
+WhatsApp bridge override select patched `qs` 6.16.2. `scripts/check_dependency_security.py`
+checks the selected local merge implementation, its source hash, and exploit regressions
+alongside every existing lock audit. These development trees stay out of the runtime.
+
 Luna release updates use `luna_cli.release_update` from the existing dashboard endpoints.
 `hermes_cli/web_routers/actions.py` delegates Luna discovery and installation to that overlay,
 serializes update launches and reports when the selected runtime needs reopening.
