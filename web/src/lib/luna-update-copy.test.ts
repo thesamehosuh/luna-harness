@@ -15,6 +15,9 @@ describe("Luna release update guidance", () => {
   it("shows a completed installation instead of offering another install", () => {
     expect(lunaReleaseUpdateDescription({ ...release, restart_required: true, update_available: false, message: "Reopen Luna to use alpha.10" })).toBe("Reopen Luna to use alpha.10");
   });
+  it("does not offer an older or already installed published release", () => {
+    expect(lunaReleaseUpdateDescription({ ...release, update_available: false, message: "You're on the latest published Luna version." })).toBe("You're on the latest published Luna version.");
+  });
   it("leaves the engine's unrelated deployment types to their own guidance", () => {
     expect(lunaReleaseUpdateDescription({ ...release, install_method: "docker" })).toBeNull();
   });

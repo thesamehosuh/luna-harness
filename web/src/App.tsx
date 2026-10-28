@@ -1030,6 +1030,7 @@ function SidebarSystemActions({
 
   const confirmUpdate = () => {
     setUpdateConfirmOpen(false);
+    if (updateConfirmInfo?.install_method === "luna-release" && (!updateConfirmInfo.update_available || !updateConfirmInfo.can_apply)) return;
     void runAction("update");
     navigate("/sessions");
     onNavigate();
@@ -1098,7 +1099,7 @@ function SidebarSystemActions({
 
     <ConfirmDialog
       cancelLabel={t.common.cancel}
-      confirmLabel={t.status.updateLunaConfirmNow ?? "Update now"}
+      confirmLabel={updateConfirmInfo?.install_method === "luna-release" && (!updateConfirmInfo.update_available || !updateConfirmInfo.can_apply) ? "Done" : t.status.updateLunaConfirmNow ?? "Update now"}
       description={
         updateConfirmChecking ? t.common.loading : updateConfirmDescription
       }
