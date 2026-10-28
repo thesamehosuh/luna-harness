@@ -153,6 +153,14 @@ Endpoint tests: `tests/hermes_cli/test_web_luna_routes.py`; model/schema tests: 
 
 ## Not engine edits
 
+Luna release updates use `luna_cli.release_update` from the existing dashboard endpoints.
+`hermes_cli/web_routers/actions.py` delegates Luna discovery and installation to that overlay,
+serializes update launches and reports when the selected runtime needs reopening.
+`hermes_cli/web_server_gateway.py` accepts an internal module override for its existing detached
+action runner; ordinary engine and gateway actions retain their command paths.
+`web/src/{App.tsx,pages/SystemPage.tsx,contexts/SystemActions.tsx,lib/api.ts}` show release versions,
+installation results and explicit reopen/start guidance through the same action-log flow.
+
 Behaviour customization extends `web/src/pages/BehaviourPage.tsx` and `web/src/lib/luna-api.ts`
 with prompt/rubric editors, reaction meanings, removable conditions, route controls, and an
 immediate master switch. `web/src/components/BehaviourEditors.tsx` contains the authoring UI.

@@ -1,3 +1,9 @@
+# Luna 0.1.0-alpha.10
+
+- Check for published Luna releases and install verified runtime updates from the dashboard.
+- Preserve the existing runtime for rollback and show when Luna needs to be reopened.
+- Keep existing service commands aligned with the installation's selected runtime.
+
 # Luna 0.1.0-alpha.9
 
 - Rework Behaviour with editable Jev prompts, answer rubrics, reaction palettes and meanings, wake prompts, and custom conditions.

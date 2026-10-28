@@ -46,6 +46,19 @@ The version/URL are selected by the publisher. Never ship the illustrative OWNER
 
 ## Runtime and data ownership
 
+System → Check for updates and the sidebar's Update Luna action use the Luna repository's
+published release bundles. Alpha installations follow published prereleases; stable installations
+remain on stable releases. A downloaded descriptor must name the same repository/version and
+provide the runtime's SHA-256. The archive is bounded and extracted without links or escaping
+paths, then the existing installer checks dependencies, imports and stopped companions before
+atomically selecting the runtime. The previous runtime and personal settings remain available.
+
+Stop affected companions in Control Center and let active chats finish before updating. The
+dashboard shows installation output and then asks you to quit and reopen Luna. Its existing
+launcher opens the newly selected runtime, even if that launcher's embedded release is older.
+Start companions explicitly after reopening. Source checkouts and externally managed containers
+keep their own installation workflow; the vendored engine updater cannot replace Luna.
+
 - POSIX default: `~/.luna`; Windows default: `%LOCALAPPDATA%\Luna`.
 - A legacy/nonempty unowned home is preserved. The desktop chooses a separate clean sibling home
   instead of importing old persona, keys or history. Explicit `LUNA_HOME` is a developer override.

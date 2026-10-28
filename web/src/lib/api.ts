@@ -1830,6 +1830,10 @@ export interface UpdateCheckResponse {
   can_apply: boolean;
   update_command: string;
   message: string | null;
+  latest_version?: string;
+  installed_version?: string;
+  restart_required?: boolean;
+  release_url?: string;
 }
 
 export interface SystemStats {
@@ -1897,6 +1901,7 @@ interface FetchJSONOptions {
 }
 
 export interface ActionStatusResponse {
+  restart_required?: boolean;
   exit_code: number | null;
   lines: string[];
   name: string;

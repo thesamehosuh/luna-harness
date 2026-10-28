@@ -50,7 +50,7 @@ export function SystemActionsProvider({
           setToast({
             type: ok ? "success" : "error",
             message: ok
-              ? t.status.actionFinished
+              ? resp.restart_required ? "Update installed. Quit and reopen Luna to use it." : t.status.actionFinished
               : `${t.status.actionFailed} (exit ${resp.exit_code ?? "?"})`,
           });
           return;

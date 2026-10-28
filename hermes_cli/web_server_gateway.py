@@ -452,7 +452,8 @@ def _action_targets_system_gateway(subcommand: List[str]) -> bool:
 
 
 def _spawn_hermes_action(
-    subcommand: List[str], name: str, *, env_overrides: Optional[Dict[str, str]] = None
+    subcommand: List[str], name: str, *, env_overrides: Optional[Dict[str, str]] = None,
+    module: Optional[str] = None,
 ) -> subprocess.Popen:
     """Spawn ``hermes <subcommand>`` detached (via ``hermes_cli.main``) and record the handle."""
     from hermes_cli.web_server import PROJECT_ROOT
@@ -461,7 +462,7 @@ def _spawn_hermes_action(
     log_file.write(f"\n=== {name} started {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n".encode())
 
     from hermes_cli.product_runtime import cli_module
-    cmd = [_dashboard_spawn_executable(), "-m", cli_module(), *subcommand]
+    cmd = [_dashboard_spawn_executable(), "-m", module or cli_module(), *subcommand]
     if _action_targets_system_gateway(subcommand):
         # A system-scope lifecycle verb spawned as the dashboard's own user can only ever write
         # "System gateway <verb> requires root" into this log, so the button never worked on a

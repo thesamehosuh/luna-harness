@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { lunaReleaseUpdateDescription } from "@/lib/luna-update-copy";
 import {
   Routes,
   Route,
@@ -970,6 +971,8 @@ function SidebarSystemActions({
   }, [updateConfirmOpen]);
 
   const updateConfirmDescription = useMemo(() => {
+    const releaseDescription = lunaReleaseUpdateDescription(updateConfirmInfo);
+    if (releaseDescription) return releaseDescription;
     // Name only the command that will actually run — see SystemPage's matching dialog. The backend
     // reports the deployment's real update path, so inventing a literal 'luna update' beside it
     // contradicted the sentence on any install where the two differ.

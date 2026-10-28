@@ -1,4 +1,5 @@
 import { LunaDataPanel } from "@/components/LunaDataPanel";
+import { lunaReleaseUpdateDescription } from "@/lib/luna-update-copy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -572,7 +573,9 @@ export default function SystemPage() {
         const info = await api.checkLunaUpdate(force);
         setUpdateInfo(info);
         if (force) {
-          if (info.update_available) {
+          if (info.restart_required && !info.update_available) {
+            showToast(info.message ?? "Update installed. Quit and reopen Luna to use it.", "success");
+          } else if (info.update_available) {
             showToast(
               info.behind && info.behind > 0
                 ? `Update available — ${info.behind} commit${info.behind === 1 ? "" : "s"} behind`
@@ -731,6 +734,8 @@ export default function SystemPage() {
         onConfirm={() => void applyUpdate()}
         title="Update Luna?"
         description={(() => {
+          const releaseDescription = lunaReleaseUpdateDescription(updateInfo);
+          if (releaseDescription) return releaseDescription;
           // Name only the command that will actually run. The backend reports the
           // deployment's real update path (`docker pull …`, `pkg upgrade …`, `luna update`), so
           // this sentence used to invent a literal 'hermes update' next to it — which contradicted
@@ -921,7 +926,7 @@ export default function SystemPage() {
               <div>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground">Luna</div>
                 <div className="flex items-center gap-2">
-                  <span>v{stats?.hermes_version}</span>
+                  <span>v{updateInfo?.install_method === "luna-release" ? updateInfo.current_version : stats?.hermes_version}</span>
                   {canUpdateLuna &&
                     updateInfo &&
                     (updateInfo.update_available ? (
@@ -930,6 +935,8 @@ export default function SystemPage() {
                           ? `${updateInfo.behind} behind`
                           : "update available"}
                       </Badge>
+                    ) : updateInfo.restart_required ? (
+                      <Badge tone="warning">Reopen Luna</Badge>
                     ) : updateInfo.behind === 0 ? (
                       <Badge tone="success">latest</Badge>
                     ) : null)}

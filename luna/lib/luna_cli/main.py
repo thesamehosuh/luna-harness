@@ -58,10 +58,23 @@ def _rebrand() -> None:
     # main() imports the symbol lazily, so patching the module attribute is enough.
 
 
+def _handoff_selected_runtime():
+    # Existing service units may pin an older immutable runtime. Resolve the
+    # installation's verified pointer before importing engine/gateway modules.
+    installed = Path(sys.prefix).parent.resolve()
+    if (installed / ".luna-state-home").is_file():
+        from hermes_cli.product_runtime import code_root
+        selected = code_root(Path(os.environ["HERMES_HOME"])).resolve()
+        if selected != installed:
+            python = selected / ("venv/Scripts/python.exe" if os.name == "nt" else "venv/bin/python")
+            os.execv(str(python), [str(python), "-m", "luna_cli.main", *sys.argv[1:]])
+
+
 def main() -> int:
     os.environ["HERMES_HOME"] = luna_home()
     # The entry alias must not override a named profile selected later by the engine.
     os.environ.pop("LUNA_HOME", None)
+    _handoff_selected_runtime()
     # A release carries compiled assets, not the Node source/build toolchain.
     dist = Path(__file__).resolve().parents[3] / "hermes_cli" / "web_dist"
     if (dist / "index.html").is_file():

@@ -11,6 +11,7 @@ import re
 import secrets
 import subprocess
 import time
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -53,6 +54,22 @@ _ACTION_LOG_TAIL_MAX_CHUNK_BYTES = 64 * 1024
 _UPDATE_ACTION_COMPLETED_RE = re.compile(r"^=== hermes-update completed ([0-9a-f]{32}) ===$")
 
 _MANAGED_EXTERNALLY_MESSAGE = "Luna updates are managed outside this dashboard in containerized environments."
+_LUNA_UPDATE_START_LOCK = threading.Lock()
+
+
+def _start_luna_update():
+    """Serialize discovery and spawn so two dashboard clicks share one operation."""
+    from luna_cli import release_update
+    with _LUNA_UPDATE_START_LOCK:
+        existing = _ACTION_PROCS.get("hermes-update")
+        if existing is not None and existing.poll() is None:
+            return {"ok": True, "pid": existing.pid, "name": "hermes-update", "already_running": True}
+        info = release_update.check(True)
+        if not info["can_apply"] or not info["update_available"]:
+            return {"ok": False, "pid": None, "name": "hermes-update", "message": info["message"]}
+        release_update.require_stopped(release_update.installation())
+        proc = _spawn_hermes_action(["apply"], "hermes-update", module="luna_cli.release_update")
+        return {"ok": True, "pid": proc.pid, "name": "hermes-update"}
 
 # Per-kind dashboard error codes the UI keys on, by admission-refusal code.
 _UPDATE_REFUSAL_ERROR_CODES = {
@@ -244,6 +261,11 @@ async def update_hermes():
     from hermes_cli.update_contract import evaluate_update_admission, record_refusal_receipt
 
     refusal = evaluate_update_admission(_server_path("PROJECT_ROOT"))
+    if refusal is not None and refusal.code == "luna-release":
+        try:
+            return await asyncio.to_thread(_start_luna_update)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     if refusal is not None:
         response = _update_refused(
             _UPDATE_REFUSAL_ERROR_CODES.get(refusal.code, "update_not_in_place"), refusal.message, refusal.update_command,
@@ -297,11 +319,8 @@ async def check_hermes_update(force: bool = False):
 
     refusal = evaluate_update_admission(_server_path("PROJECT_ROOT"))
     if refusal is not None and refusal.code == "luna-release":
-        return {
-            "install_method": "luna-release", "current_version": __version__, "behind": None,
-            "update_available": False, "can_apply": False,
-            "update_command": refusal.update_command, "message": refusal.message,
-        }
+        from luna_cli.release_update import check
+        return await asyncio.to_thread(check, force)
 
     install_method = detect_install_method(_server_path("PROJECT_ROOT"))
     payload: Dict[str, Any] = {
@@ -398,6 +417,12 @@ async def get_action_status(name: str, lines: int = 200):
             _finish_action(name, exit_code, pid)
 
     response = {"name": name, "running": running, "exit_code": exit_code, "pid": pid, "lines": tail}
+    if name == "hermes-update" and (_server_path("PROJECT_ROOT") / "luna-release.json").is_file():
+        from luna_cli.release_update import installation, installed_version, running_version
+        try:
+            response["restart_required"] = installed_version(installation()) != running_version()
+        except (OSError, ValueError, KeyError):
+            response["restart_required"] = False
     if durable_update_action_id:
         response["action_id"] = durable_update_action_id
     if update_receipt_summary is not None:
