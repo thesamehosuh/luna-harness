@@ -35,6 +35,31 @@ def _load_plugin():
     return mod
 
 
+def test_worker_startup_reads_settings_in_owning_profile(tmp_path, monkeypatch, caplog):
+    from agent import secret_scope
+    from hermes_constants import set_hermes_home_override, reset_hermes_home_override
+
+    (tmp_path / '.env').write_text('LUNA_AMBIENT_DRY_RUN=false\n')
+    (tmp_path / 'config.yaml').write_text('luna: {}\n')
+    monkeypatch.setattr(secret_scope, '_MULTIPLEX_ACTIVE', True)
+    profile = set_hermes_home_override(tmp_path)
+    secrets = secret_scope.set_secret_scope(None)
+    mod = _load_plugin()
+    seen = []
+    monkeypatch.setattr(mod, '_loop', lambda ref: seen.append(mod._dry_run()))
+    try:
+        with caplog.at_level(logging.INFO):
+            mod._ensure_thread(None)
+        mod._THREAD.join(timeout=2)
+        assert not mod._THREAD.is_alive()
+        assert seen == [False]
+        assert 'poller started (dry_run=False)' in caplog.text
+        assert secret_scope.current_secret_scope() is None
+    finally:
+        secret_scope.reset_secret_scope(secrets)
+        reset_hermes_home_override(profile)
+
+
 class FakeJev:
     def __init__(self, add_value=0.95, reaction_fit=0.8, reaction_fresh=0.9,
                  addressed=0.05, requests_reaction=0.0, message_fit=0.0, open_q=0.8):

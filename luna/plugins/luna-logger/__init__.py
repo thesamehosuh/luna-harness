@@ -131,7 +131,7 @@ def sync_alias_map(index_conn) -> int:
 
 
 def sync_honcho_room(index_conn) -> int:
-    """Write recently indexed room messages into the shared Honcho session, per author.
+    """Write indexed messages into each public group session, per author/topic.
 
     Best-effort and idempotent (dedup by message_id). Returns messages written; 0 on any failure
     (e.g. Honcho down, SDK missing) — never raises.
@@ -140,28 +140,37 @@ def sync_honcho_room(index_conn) -> int:
         return 0
     if not _flag("LUNA_LOGGER_SYNC_HONCHO", _sync_honcho_default()):
         return 0
+    from plugins.memory.honcho.client import HonchoClientConfig
+    memory_config = HonchoClientConfig.from_global_config()
+    if not memory_config.enabled or not memory_config.save_messages:
+        return 0
     from luna_core.managed_memory import restore
     restore()
-    chat_id = _chat_id()
-    room_session = _room_session()
-    if not chat_id or not room_session:
+    primary_chat = _chat_id()
+    allowed = {str(chat) for chat in config_read.section("telegram", "group_allowed_chats", default=[]) or []}
+    if primary_chat:
+        allowed.add(primary_chat)
+    rooms = [str(row[0]) for row in index_conn.execute(
+        "SELECT DISTINCT chat_id FROM messages ORDER BY chat_id")
+        if str(row[0]) in allowed and str(row[0]).startswith("-")]
+    if not rooms:
         return 0
     try:
-        from luna_core.honcho import HonchoStore, backfill_room
+        from luna_core.honcho import HonchoStore, backfill_room, public_room_session
 
         from luna_core.honcho import connection_settings
         store = HonchoStore(**connection_settings())
-        result = backfill_room(
-            store, index_conn,
-            chat_id=chat_id,
-            room_session=room_session,
-            limit=_num("LUNA_LOGGER_HONCHO_LIMIT", 50),
-        )
-        if result.written:
-            log.info("[luna-logger] synced %d message(s) to Honcho room", result.written)
-        if result.errors:
-            log.debug("[luna-logger] honcho room errors: %s", result.errors[:3])
-        return result.written
+        written = 0
+        limit = max(1, _num("LUNA_LOGGER_HONCHO_LIMIT", 50) // len(rooms))
+        for chat_id in rooms:
+            result = backfill_room(store, index_conn, chat_id=chat_id,
+                room_session=public_room_session("telegram", chat_id), limit=limit)
+            written += result.written
+            if result.errors:
+                log.debug("[luna-logger] honcho room errors: %s", result.errors[:3])
+        if written:
+            log.info("[luna-logger] synced %d message(s) to scoped Honcho rooms", written)
+        return written
     except Exception:
         log.debug("[luna-logger] honcho room sync skipped", exc_info=True)
         return 0

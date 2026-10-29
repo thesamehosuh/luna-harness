@@ -1103,7 +1103,8 @@ class TurnRunner:
         src = ctx.source
         if isinstance(ctx.user_config.get("luna"), dict):
             from luna_core.surface_policy import private_memory_allowed
-            if not private_memory_allowed(ctx.user_config, src.chat_type, src.user_id):
+            if not private_memory_allowed(ctx.user_config, src.chat_type, src.user_id,
+                                          platform=src.platform, chat_id=src.chat_id):
                 skip_context_files = True
         return ctx.AIAgent(
             model=turn_route["model"], **turn_route["runtime"], **_checkpoint_agent_kwargs(ctx.user_config),
@@ -1467,10 +1468,27 @@ class TurnRunner:
         from gateway.run_turn_runner_approval_settle import register_timeout_notice
         ctx = self._ctx
         adapter = ctx._status_adapter
+        approval_session_key = ctx.session_key or ""
+        if approval_data.get("owner_dm_only"):
+            # Private-memory previews may never fall back to the source group.
+            from luna_core.group_memory import owner_dm
+            destination = str(ctx._status_chat_id or "")
+            if not owner_dm(ctx.user_config, getattr(ctx.source.platform, "value", ctx.source.platform),
+                            "dm", destination, destination):
+                owners = (ctx.user_config.get("telegram") or {}).get("allow_admin_from") or []
+                destination = next((str(uid) for uid in owners if str(uid).isdecimal() and int(str(uid)) > 0), "")
+                if not destination:
+                    raise RuntimeError("Private memory approval requires the configured owner's DM")
+            import dataclasses
+            ctx = dataclasses.replace(ctx, _status_chat_id=destination, _status_thread_metadata={})
+            requested_key = str(approval_data.get("approval_session_key") or "")
+            if not requested_key.startswith("private-memory:"):
+                raise RuntimeError("Private memory approval is missing its one-use request identity")
+            approval_session_key = requested_key
         # Luna 0010: the card below goes to ``ctx._status_chat_id`` — the operator DM when this is a
         # group turn. Register the forward so a typed /approve in that DM satisfies this gate.
         from gateway.operator_route import register_forwarded_prompt
-        register_forwarded_prompt(ctx.source, ctx.session_key or "", target_chat_id=ctx._status_chat_id)
+        register_forwarded_prompt(ctx.source, approval_session_key, target_chat_id=ctx._status_chat_id)
         # Slack's assistant_threads_setStatus disables the compose box, so the user can't type
         # /approve while "is thinking..." shows. Pausing stops _keep_typing re-setting it; resumed
         # in approve/deny.
@@ -1479,14 +1497,20 @@ class TurnRunner:
         # Redact credentials before display: Tirith's findings are already redacted, but the raw
         # command string still leaks secrets. Both the button and plain-text paths use this value.
         cmd = _redact_approval_command(approval_data.get("command", ""))
+        if approval_data.get("owner_dm_only") and approval_data.get("preview_sanitized"):
+            # The disclosure tool already redacted the approved snapshot. Keep
+            # its exact preview bytes, which are also the only bytes it returns.
+            cmd = approval_data.get("command", "")
         desc = approval_data.get("description", "dangerous command")
         flags = {k: approval_data.get(k, d) for k, d in (("allow_permanent", True), ("allow_session", True), ("smart_denied", False))}
+        if approval_data.get("owner_dm_only"):
+            flags["kind"] = "private_memory"
         # Check the *class*, not the instance — MagicMock auto-creates attributes in tests.
         if _renders_exec_approval_buttons(type(adapter)):
             try:
                 fut = self._schedule(
                     adapter.send_exec_approval(
-                        chat_id=ctx._status_chat_id, command=cmd, session_key=ctx.session_key or "",
+                        chat_id=ctx._status_chat_id, command=cmd, session_key=approval_session_key,
                         description=desc, metadata=ctx._status_thread_metadata, **flags,
                     ),
                     "send_exec_approval scheduling error",
@@ -1499,7 +1523,7 @@ class TurnRunner:
                     # learns the command did NOT run (only the TUI registered a settle hook).
                     register_timeout_notice(
                         self, approval_data, command=cmd,
-                        card_message_id=getattr(fut.result(timeout=0), "message_id", None))
+                        card_message_id=getattr(fut.result(timeout=0), "message_id", None), notification_context=ctx)
                     return
                 if outcome == "ambiguous":
                     # Timeout ≠ failure: the card may have posted with a late ack. The prompt
@@ -1546,7 +1570,11 @@ class TurnRunner:
                 logger.warning("Button-based approval failed, falling back to text: %s", e)
         # Plain-text prompt with the adapter's typed prefix (e.g. `!approve`): typed "/" is blocked
         # in Slack threads and reserved by Matrix clients.
-        msg = _format_exec_approval_fallback(cmd, desc, getattr(adapter, "typed_command_prefix", "/"), **flags)
+        if approval_data.get("owner_dm_only"):
+            msg = ("🔒 Share private memory with a group?\n\n```\n" + cmd + "\n```\n\n" + desc +
+                   "\n\nReply /approve to share this excerpt once, or /deny to keep it private. No answer means no sharing.")
+        else:
+            msg = _format_exec_approval_fallback(cmd, desc, getattr(adapter, "typed_command_prefix", "/"), **flags)
         try:
             # Mark as approval prompt so WeCom routes through the control lane.
             metadata = {**(ctx._status_thread_metadata or {}), "is_approval_prompt": True}
@@ -1557,9 +1585,11 @@ class TurnRunner:
                 fut.result(timeout=15)
                 # No card to edit on the text path: the prompt has no buttons to drop and carries
                 # the /approve instructions, so the timeout notice is posted as a new message.
-                register_timeout_notice(self, approval_data, command=cmd, card_message_id=None)
+                register_timeout_notice(self, approval_data, command=cmd, card_message_id=None, notification_context=ctx)
         except Exception as e:
             logger.error("Failed to send approval request: %s", e)
+            if approval_data.get("owner_dm_only"):
+                raise RuntimeError("Private memory approval could not be delivered") from None
 
     # ── run_sync phases ─────────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,14 @@
 # Profiles, new-user defaults and the basic people directory
 
+**Memory → Files** edits private `MEMORY.md`, private `USER.md`, the complete `PEOPLE.md`
+directory, and every observed group's `MEMORY.md`. People and Groups link directly to the
+relevant file editor. Raw directory edits keep the observed transport IDs and group/DM headings;
+the structured People form remains available for editing one entry. Saves reject stale revisions
+after another tab or model turn changes a file and preserve the user's draft. The Memory settings
+tab keeps file-maintenance switches separate from Honcho. Manual editing remains available when
+automatic memory use is off. Private cached notes load in new conversations; group notes and
+people updates are read on the next relevant turn.
+
 Use **Profiles → Export profile** to download a versioned `.luna-profile.json` file. It contains
 the saved persona, model selections and credential references, behaviour settings, output limits,
 appearance, the selected custom terminal skin, skill selections and Honcho tuning. Character's
@@ -87,3 +96,32 @@ Setup and Character share four persona starting points: Easygoing, Warm friend, 
 Curious mind. Voice samples appear in Setup; the complete prompts are available before applying.
 Custom personas remain a separate choice. Selecting a preset is explicit; updates never replace
 an existing persona automatically.
+
+## Group MEMORY.md and private lookups
+
+Each profile/group/topic has its own `memories/groups/<scope hash>/MEMORY.md`. It uses the real
+Hermes MemoryStore and memory tool: atomic add/replace/remove batches, character limits and the
+existing `memory.write_approval` gate. `memory.memory_enabled` enables these notes;
+`memory.user_profile_enabled` also controls periodic PEOPLE.md maintenance. The existing
+`memory.nudge_interval` and `auxiliary.background_review.*` settings control automatic reviews.
+With write approval off, consolidation can update older entries without creating approval proposals.
+Background group reviews have only the scoped memory and people writers; they cannot read private files.
+Group notes refresh through the user sidecar, never the cached system prompt.
+
+The `group_memory` tool lists and reads saved group files in the owner DM. The `people` tool accepts
+`chat_id` and optional `thread_id` for explicit owner lookup/update of scoped group entries. Neither
+automatically injects other groups' files into a DM. Ordinary DMs cannot use owner lookup privileges.
+
+The `private_memory` tool reads private USER.md/MEMORY.md directly in the owner DM. In Telegram
+groups it selects a bounded, redacted excerpt locally and requests explicit approval in the
+configured owner's DM. The approval shows the exact snapshot and destination group/topic/message,
+offers share-once/deny only, and uses a separate random request queue that group `/approve` cannot
+resolve. Denial, timeout, cancellation or delivery failure releases no private content. An approved
+excerpt may remain in the destination group's conversation and saved memory, as the owner preview
+states. A changed source file cannot replace the snapshot after approval. File-write approval and
+global automatic approval settings do not bypass this disclosure gate.
+
+Honcho room writes and recall use the same stable public group session namespace. The indexer
+syncs admitted groups, rather than only the main configured room. Existing group history remains available without a reindex or identity reset. Public recall may
+span topics; topic tags remain on messages. File notes, live context and wake dispatch stay
+topic-scoped. Private DM sessions are unchanged.

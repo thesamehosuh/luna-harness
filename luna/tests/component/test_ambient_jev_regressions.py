@@ -367,3 +367,44 @@ def test_stale_internal_target_is_rejected_using_indexed_source_time(system):
         await asyncio.wait_for(fixture.idle(coordinator), 3)
         assert not adapter.sent and not value._gateway_accepted
     asyncio.run(run())
+
+
+def test_new_route_does_not_inherit_previous_route_cooldown(system):
+    home, cfg, mod, _ = system
+    first = mod._jev_client()
+    mod._pause_jev(600, 'old route exhausted')
+    assert mod._jev_paused()
+    cfg['luna']['ambient']['jev']['providers']['local']['model'] = 'another-synthetic-model'
+    (home / 'config.yaml').write_text(json.dumps(cfg))
+    assert mod._jev_client() is not first
+    assert not mod._jev_paused()
+
+
+def test_persona_changes_invalidate_pending_judgments(system):
+    home, cfg, mod, _ = system
+    before = mod._intent_revision()
+    (home / 'SOUL.md').write_text('# Mira\nUpdated preferences for joining a conversation.\n')
+    assert mod._intent_revision() != before
+    cfg['luna']['character']['name'] = 'Nora'
+    (home / 'config.yaml').write_text(json.dumps(cfg))
+    assert mod._luna_section()['character']['name'] == 'Nora'
+    assert all('Luna' not in str(question) for question in c.build_questions())
+
+
+def test_offline_replay_applies_saved_custom_condition_answers(system):
+    from dataclasses import asdict
+    from luna_core.behaviour_policy import apply_policy, validate_policy
+    from luna_core.jev_replay import replay
+    home, cfg, mod, conn = system
+    configured = {'questions': {}, 'rules': [{'id': 'permission', 'name': 'Room permission', 'instructions': 'May the companion join?',
+                  'action': 'both', 'threshold': 0.8, 'enabled': True}]}
+    cfg['luna']['ambient']['decision'] = configured
+    questions = apply_policy(c.build_questions(), validate_policy(configured, c.build_questions()))
+    answers = valid_answers(questions)
+    conn.execute("INSERT INTO ambient_judgments(chat_id,thread_id,message_id,created_at,answers,original_action,candidate_text,revision) VALUES (?,?,?,?,?,?,?,?)",
+                 (CHAT, '', 'replay-condition', NOW.isoformat(), json.dumps({key: asdict(value) for key, value in answers.items()}), 'message', '', 'fixture'))
+    conn.commit()
+    result = replay(home / 'luna-state.db', cfg)
+    assert result['network_calls'] == 0
+    assert result['report'][0]['action'] == 'silent'
+    assert result['report'][0]['reason'] == 'custom condition: Room permission'

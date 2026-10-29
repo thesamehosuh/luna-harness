@@ -28,6 +28,7 @@ Research-backed; update this file as phases land. Session decisions are recorded
 | D18 | **New-user defaults, not operator preferences.** Neutral editable character, live OpenCode model choice, balanced reasoning and text-first replies. Memory, wakes, voice, writing-style rewrites and startup behaviour are opt-in. Existing saved choices are preserved. Portable config/persona files import into new profiles with fresh identity/connection state. See `luna/docs/profiles-and-people.md`. |
 | D19 | **Basic model-writable PEOPLE.md.** A profile-local who's-who fallback remains available without Honcho. Store only names, aliases, pronouns and short roles, keyed to observed transport identities. One person can belong to several groups; model updates remain scoped to their source group or DM. Bounded context uses the sidecar/user-message path, never the system prompt. |
 | D20 | **Bounded group turn taking.** One selected reply per profile/bot/chat/topic, fixed transport recipient, short request lifetimes and limited answers per burst. Other authors' pending questions are never merged tasks; DMs remain independent. Behaviour exposes controls and recent decisions. Dynamic targets stay out of the cached prompt. See `luna/docs/group-conversation-audit.md`. |
+| D21 | **Group file memory uses the engine's maintenance loop.** Each group/topic owns MEMORY.md, with scoped PEOPLE.md as its basic people directory. Keep the existing memory enable flags, character limits, nudge cadence, write-approval setting and auxiliary background-review controls. Owner DMs look up group files explicitly, without automatically injecting their contents. Private USER.md/MEMORY.md reads are approval-free in the owner's DM; groups need a separate one-read owner-DM approval showing the exact excerpt and destination. The verified Telegram setup owner is an administrator; arbitrary DM senders are not. |
 | D9 | **Dashboard identity is Sakura:** midnight violet, blossom pink, lavender and warm gold, inspired by the operator's reference image. Sakura Dusk is the fresh-install and first-paint default, independent of OS appearance. Sakura Day, Mono and custom themes remain available. Dashboard and launcher share typography, control/panel radii and one canonical crescent-and-blossom icon. Retired preset preferences migrate. Remaining polish work is tracked in `POLISH_PLAN.md`; this does not authorize a release or changes to the live deployment. |
 
 ## 2. What the product is
@@ -219,7 +220,7 @@ operator-initiated only; raw YAML editor behind an "advanced" gate; reaction tie
     paths kept). Default skin (`display.skin: luna`) already shipped. Engine edits recorded in
     `luna/docs/engine-vendor.md`.
 
-### P6 — Product hardening ✅ / release ⏸ (deferred by operator)
+### P6 — Product hardening ✅ / alpha release pipeline active
 - Privacy defaults review + threat model pass on the dashboard and Telegram surfaces. ✅
   - Reasoning, trust boundaries, and the full findings list: `luna/docs/threat-model.md`.
   - **Retention was only half-enforced.** `install.sh` installs a daily systemd timer that runs the
@@ -249,9 +250,10 @@ operator-initiated only; raw YAML editor behind an "advanced" gate; reaction tie
 - Packaging pre-release checks are implemented: one-command source/bundle installer, a
   self-contained archive with compiled dashboard and frozen dependency lock, state-preserving
   migration/reinstall, runtime service definitions, differential legacy replay and a CI release
-  smoke check that removes the unpacked source before probing the installed product. Evidence and
-  cutover steps: `luna/docs/release-readiness.md`. Publishing, a stable download URL, automatic
-  release updates and the remaining OS matrix are still deferred; no git tags have been cut.
+  smoke check that removes the unpacked source before probing the installed product. Alpha builds
+  use the cross-platform workflow and draft-release acceptance gate documented in
+  `luna/docs/desktop-release.md`. Stable releases, signing, and unassisted clean-machine acceptance
+  remain future gates.
   Optional: desktop port re-evaluated here.
 
 ## 7. Testing policy

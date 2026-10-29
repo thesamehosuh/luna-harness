@@ -24,6 +24,7 @@ INVENTORY = [
     {"store": "Derived memory", "path": "Honcho conclusions, memories/", "retention": "Persistent until explicitly deleted", "backup": "pg_dump + files"},
     {"store": "Identity", "path": "luna-state.db", "retention": "Persistent until explicitly deleted", "backup": "SQLite backup API"},
     {"store": "Basic people directory", "path": "PEOPLE.md", "retention": "Persistent; names, aliases, pronouns and short roles only", "backup": "Private data backup; excluded from portable profiles"},
+    {"store": "Group file memory", "path": "memories/groups/*/MEMORY.md", "retention": "Persistent, isolated by group and topic", "backup": "Private data backup; excluded from portable profiles"},
     {"store": "Logs", "path": "logs/", "retention": "luna.logging.*", "backup": "Excluded; operational data"},
     {"store": "Backups", "path": "backups/luna/", "retention": "luna.data.backup_days", "backup": "Download archive"},
 ]

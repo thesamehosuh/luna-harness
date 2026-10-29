@@ -127,7 +127,13 @@ def _core_tool_names() -> frozenset[str]:
     """Names that never defer by default (lazy: ``toolsets`` imports ``tools.registry``)."""
     try:
         from toolsets import _HERMES_CORE_TOOLS
-        return frozenset(_HERMES_CORE_TOOLS)
+        names = frozenset(_HERMES_CORE_TOOLS)
+        from hermes_cli.product_runtime import enabled as luna_enabled
+        if luna_enabled():
+            # Luna's small everyday memory surface must be ambient, like the
+            # built-in memory writer. Toolset and privacy gates still apply.
+            names |= {"people", "group_memory", "private_memory"}
+        return names
     except Exception:
         return frozenset()
 

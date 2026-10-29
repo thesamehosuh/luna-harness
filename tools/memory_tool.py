@@ -97,15 +97,16 @@ def _batch_op_line(op: Dict[str, Any]) -> str:
 
 
 def _apply_write_gate(action: str, target: str, content: Optional[str], old_text: Optional[str],
-                      operations: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
+                      operations: Optional[List[Dict[str, Any]]] = None, store=None) -> Optional[str]:
     """Gate one mutating op, or (``operations`` set) a whole batch as a single unit."""
     label = "user profile" if target == "user" else "memory"
-    if operations is not None:
-        return _gate_or_stage(f"apply {len(operations)} op(s) to {label}",
-                              "\n".join(_batch_op_line(op) for op in operations),
-                              {"action": "batch", "target": target, "operations": operations})
-    return _gate_or_stage(*_STORE_ACTIONS[action][1](label, content, old_text),
-                          {"action": action, "target": target, "content": content, "old_text": old_text})
+    payload = ({"action": "batch", "target": target, "operations": operations} if operations is not None else
+               {"action": action, "target": target, "content": content, "old_text": old_text})
+    if getattr(store, "is_group_memory", False):
+        payload["group_scope"] = dict(store.group_scope)
+    summary, detail = ((f"apply {len(operations)} op(s) to {label}", "\n".join(_batch_op_line(op) for op in operations))
+                       if operations is not None else _STORE_ACTIONS[action][1](label, content, old_text))
+    return _gate_or_stage(summary, detail, payload)
 
 
 def _validate_single_op(store, action, target, content, old_text) -> Optional[str]:
@@ -129,16 +130,18 @@ def _validate_single_op(store, action, target, content, old_text) -> Optional[st
 _BG_DELETE_ACTIONS = ("replace", "remove")
 
 
-def _background_delete_gate(action, operations, target="memory", content=None, old_text=None) -> Optional[str]:
-    """Fail-closed operation gate for unattended background-review forks (#105921): ``add``
-    stays available (it is all any review prompt asks for), while ``replace``/``remove`` —
-    single or inside a batch — are never applied unattended. The op is staged in the pending
-    store instead of merely denied: the fork's own review summary is never published back, so
-    a plain denial would drop the consolidation request with no surfacing path at all. A
-    staging failure fails closed to a plain denial."""
+def _background_delete_gate(action, operations, target="memory", content=None, old_text=None, store=None) -> Optional[str]:
+    """Stage unattended consolidation when memory.write_approval is enabled.
+
+    With the existing approval knob off, background maintenance has the same
+    add/replace/remove behavior as foreground maintenance. Staging failures deny.
+    """
     from tools.skill_provenance import is_unattended_review
 
     if not is_unattended_review():
+        return None
+    from tools import write_approval as wa
+    if not wa.write_approval_enabled(wa.MEMORY):
         return None
     hit = action in _BG_DELETE_ACTIONS or any(
         isinstance(op, dict) and op.get("action") in _BG_DELETE_ACTIONS for op in (operations or []))
@@ -147,6 +150,8 @@ def _background_delete_gate(action, operations, target="memory", content=None, o
     payload = ({"action": "batch", "target": target, "operations": operations}
                if operations is not None else
                {"action": action, "target": target, "content": content, "old_text": old_text})
+    if getattr(store, "is_group_memory", False):
+        payload["group_scope"] = dict(store.group_scope)
     detail = ("; ".join(_batch_op_line(op) for op in operations) if operations is not None
               else _batch_op_line({"action": action, "content": content, "old_text": old_text}))
     try:
@@ -187,19 +192,19 @@ def memory_tool(action: str = None, target: str = "memory", content: str = None,
     if operations:
         if not isinstance(operations, list):
             return tool_error("operations must be a list of {action, content?, old_text?} objects.", success=False)
-        denied = _background_delete_gate(action, operations, target)
+        denied = _background_delete_gate(action, operations, target, store=store)
         if denied is not None:
             return denied
         # Approval gate: stages (background/gateway) or prompts inline (CLI); off by default.
-        gate_result = _apply_write_gate("batch", target, None, None, operations)
+        gate_result = _apply_write_gate("batch", target, None, None, operations, store=store)
         if gate_result is not None:
             return gate_result
         return json.dumps(store.apply_batch(target, operations), ensure_ascii=False)
     if action not in _STORE_ACTIONS:
         return tool_error(f"Unknown action '{action}'. Use: add, replace, remove", success=False)
     invalid = (_validate_single_op(store, action, target, content, old_text)
-               or _background_delete_gate(action, None, target, content, old_text)
-               or _apply_write_gate(action, target, content, old_text))
+               or _background_delete_gate(action, None, target, content, old_text, store=store)
+               or _apply_write_gate(action, target, content, old_text, store=store))
     if invalid is not None:
         return invalid
     return json.dumps(_STORE_ACTIONS[action][0](store, target, content, old_text), ensure_ascii=False)
@@ -222,7 +227,13 @@ def get_builtin_memory_config(config: Optional[Dict[str, Any]] = None) -> Dict[s
 def get_builtin_memory_store_flags(config: Optional[Dict[str, Any]] = None) -> Tuple[bool, bool]:
     """Return ``(memory_enabled, user_profile_enabled)`` from resolved config."""
     section = get_builtin_memory_config(config)
-    return tuple(is_truthy_value(section.get(k), default=True) for k in ("memory_enabled", "user_profile_enabled"))
+    flags = tuple(is_truthy_value(section.get(k), default=True) for k in ("memory_enabled", "user_profile_enabled"))
+    from gateway.session_context import get_session_env
+    if get_session_env("HERMES_SESSION_CHAT_TYPE", "") in {"group", "supergroup", "channel", "forum"}:
+        from hermes_cli.product_runtime import enabled
+        if enabled():
+            return flags[0], False  # Group USER facts use people, never the private USER.md.
+    return flags
 
 
 @no_cache_check_fn
@@ -248,6 +259,10 @@ def _memory_target_error(store: "MemoryStore", target: str) -> Optional[Dict[str
 
 def apply_memory_pending(payload: Dict[str, Any], store: "MemoryStore") -> Dict[str, Any]:
     """Replay a staged write against the store, bypassing the gate (/memory approve)."""
+    if payload.get("group_scope"):
+        from luna_core.group_memory import GroupMemoryStore
+        store = GroupMemoryStore(payload["group_scope"])
+        store.load_from_disk()
     action, target = payload.get("action"), payload.get("target", "memory")
     target_error = _memory_target_error(store, target)
     if target_error is not None:
@@ -356,6 +371,22 @@ def _build_memory_schema_overrides() -> Dict[str, Any]:
         description = description.replace(
             "TARGETS: 'user' = who the user is (name, role, preferences, style). 'memory' = your "
             "notes (environment, conventions, tool quirks, lessons).", replacement)
+    from gateway.session_context import get_session_env
+    from hermes_cli.product_runtime import enabled
+    if enabled() and get_session_env("HERMES_SESSION_CHAT_TYPE", "") in {"group", "supergroup", "channel", "forum"}:
+        description = ("Maintain this group's public MEMORY.md, isolated from private owner memory and other groups/topics. "
+            "Use target='memory' for durable room knowledge, shared interests, activities and conventions. Use the people tool "
+            "for names, aliases, pronouns and short roles. Save useful facts as they arise; update or consolidate stale notes. "
+            "Use add/replace/remove, or one operations array to consolidate and add atomically within the character limit. "
+            "Use group_memory(action='recall', query=...) to search public Honcho knowledge about the current sender or room. "
+            "Private USER.md is unavailable through this tool. private_memory sends the exact excerpt to the owner's DM "
+            "for one-read approval before returning anything. "
+            "Do not infer identities or save private DM facts without owner approval.")
+    elif enabled():
+        description += (" In the owner's DM, use group_memory to list groups by name and look up a group's "
+            "MEMORY.md. Use people(action='list', chat_id=..., thread_id=...) for that group's PEOPLE.md entries. "
+            "Group files are lookup-only here and are not automatically injected. private_memory reads the owner's "
+            "private USER.md or MEMORY.md without approval in the owner's DM.")
     return {"description": description, "parameters": parameters}
 
 

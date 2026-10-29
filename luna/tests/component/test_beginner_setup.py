@@ -123,7 +123,7 @@ def test_native_reasoning_validates_schema_and_follows_changed_companion(setup_h
     assert len(seen) == 3 and seen[0]["model"] == "opencode/fixture-one"
     assert "PRIVATE PERSONA SENTINEL" not in json.dumps(seen)
     assert all("tools" not in call for call in seen)
-    with pytest.raises(ValueError, match="without tools"):
+    with pytest.raises(ValueError, match="function-tool"):
         memory_reasoning.complete({**body, "tools": [{"name": "terminal"}]})
 
 

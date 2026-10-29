@@ -85,13 +85,14 @@ function NestedValueEditor({
 
 export function AutoField({
   schemaKey,
+  label: labelOverride,
   schema,
   value,
   onChange,
 }: AutoFieldProps) {
   const inputId = useId();
   const rawLabel = schemaKey.split(".").pop() ?? schemaKey;
-  const label = rawLabel.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const label = labelOverride ?? rawLabel.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   if (isRecord(value) || (Array.isArray(value) && value.some((item) => isRecord(item)))) {
     return (
@@ -208,6 +209,7 @@ export function AutoField({
 
 interface AutoFieldProps {
   schemaKey: string;
+  label?: string;
   schema: Record<string, unknown>;
   value: unknown;
   onChange: (v: unknown) => void;

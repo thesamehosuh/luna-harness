@@ -528,3 +528,83 @@ stalled-request timeout, TypeScript and production dashboard/TUI builds.
   when replacing/deleting a block, so admin/group lists cannot leave stale entries.
 - Focused regressions cover config editing, onboarding persistence, and pairing apply.
   Dynamic prompt sidecars and cached system/channel prompt signatures are unchanged.
+
+## Group file memory and explicit private-memory disclosure
+
+- `agent/agent_init.py`: Luna group agents use an overlay MemoryStore pinned to the transport
+  group/topic instead of loading the owner's private MEMORY.md/USER.md.
+- `agent/turn_context.py`: include current public file notes in the user sidecar even without
+  Honcho, and let the ordinary memory review cadence maintain the group's people directory.
+- `agent/background_review.py`: preserve transport scope when constructing group review forks
+  and limit their writers to group memory and people. The existing auxiliary route and review
+  scheduling knobs remain authoritative.
+- `tools/memory_tool.py`: groups advertise the memory target only; approval proposals preserve
+  their group scope. Background consolidation respects `memory.write_approval=false` rather than
+  staging deletions unconditionally. No private owner file path is substituted for a group store.
+- `gateway/run_turn_runner.py`, `gateway/run_turn_runner_approval_settle.py`: private-memory
+  previews and timeout notices route only to the configured owner DM. Independent random
+  approval queues prevent a group command from approving its own disclosure request.
+- `gateway/platforms/base.py`: render private disclosure as share-once/keep-private, with an
+  exact bounded preview, instead of presenting it as a shell command.
+- `gateway/run_turn.py`, `gateway/slash_commands_session.py`: bind automatic and manual
+  compression agents to the source chat so they cannot load private files while shortening
+  a group's history. `gateway/slash_commands.py` keeps private pending-write review in owner DM.
+- `web/src/pages/MemoryPage.tsx`: expose existing file-memory flags, limits, review cadence,
+  write-approval and automatic-review controls alongside Honcho tuning.
+- `web/src/{App.tsx,lib/navigation.ts,pages/GroupsPage.tsx,pages/PeoplePage.tsx,lib/groups-api.ts}`:
+  add a primary Groups workspace for room/topic notes and members; keep People as one directory
+  with explicit group views, scoped edits, unsaved-edit protection and concurrent-update detection.
+- `web/src/{pages/OnboardingPage.tsx,pages/ChannelsPage.tsx,pages/BehaviourPage.tsx,pages/ControlCenterPage.tsx,content/help.ts}`:
+  align owner/admin, Honcho-independent file maintenance, group discovery and private-read guidance.
+
+The authenticated overlay groups router shares the existing dashboard token and profile scope.
+Setup's Honcho choice no longer toggles the independent Hermes file-memory flags. Existing verified
+Telegram-owner setup grants remain the source of admin access; a DM does not grant ownership.
+Honcho's overlay logger and recall now use matching stable public group sessions. The indexer
+syncs admitted groups, not only the configured main room, without resetting existing memory. Public
+recall may span topics; writes retain topic metadata. File notes, live context and wakes stay scoped.
+
+Runtime implementation lives in `luna_core/group_memory.py` and `private_memory.py`; basic
+directory lookup remains in `people.py`.
+
+## Honcho, Jev and companion identity integration sweep
+
+- `plugins/memory/honcho/client.py`: a named Luna profile can read its own legacy local
+  `hermes` seed under its active host block, preserving identity aliases, enabled state and tuning.
+- `gateway/run_agent_cache.py`: memory-provider identity probes are cached per home and provider,
+  so a multiplexed gateway cannot reuse the first profile's provider instance for another profile.
+- `hermes_cli/profiles.py`: cloned Luna companions start with independent memory workspaces
+  and disconnected Honcho services, without copied bridge leases or live connection overrides.
+- `hermes_cli/web_routers/profiles.py`: Luna persona saves update SOUL.md and the configured
+  companion name together through the shared settings transaction.
+- Overlay alias writers follow the selected host, use the shared writer lock and atomic file
+  replacement, and preserve unreadable configuration instead of silently replacing it.
+- The Luna memory wrapper forwards private DM recall tools, gates cached providers on the
+  current Honcho switch, and fingerprints configuration before backend initialization so the
+  gateway rebuilds agents after identity, endpoint, credential or tuning changes.
+- Room indexing applies to every admitted group. Group Honcho recall honors tools-only mode,
+  context cadence and injection frequency; explicit public recall is available through
+  `group_memory`. Private DM dialectic controls remain distinct from indexed group recall.
+- Jev uses canonical profile configuration, cancels stale decisions after persona changes,
+  and clears an obsolete cooldown when a new route is saved. Offline replay applies saved
+  answers to custom conditions and reports where fresh judgments would be necessary.
+- Behaviour threshold saves use revisions so their own writes do not strand an unsaved policy
+  draft or overwrite a concurrent settings change. Setup explicitly asks for a companion name;
+  changing voice presets preserves it.
+
+Validation is run after implementation and before installing, per the operator's updated request.
+
+### Follow-up from a real group recall failure
+
+- `plugins/platforms/telegram/adapter.py`: Luna keeps verified authors on live observed-group
+  turns. The configured per-person/topic policy now selects the same lane for conversation and
+  slash commands; observed chatter remains in its separate shared transcript. Previously `/new`
+  reset an unused per-person lane while replies restored the old shared conversation.
+- `tools/tool_search.py`: enabled Luna people/group/private-memory tools stay directly visible,
+  while toolset/privacy gates and an explicit per-tool deferral preference still apply.
+- `tools/memory_tool.py`: group schema points to the directly available public recall tool.
+- Public recall queries all conclusion levels with a public session and observed-peer filter,
+  instead of allowing frequent explicit observations to exhaust the representation cap. It
+  reserves bounded space for names, background, query matches and room summary, preserving their
+  headings/order. Explicit recall resolves the selected observed person and searches historical
+  messages; a query with no selected person no longer silently returns only a fixed summary.

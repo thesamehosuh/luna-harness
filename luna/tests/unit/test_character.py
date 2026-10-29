@@ -201,3 +201,17 @@ def test_skills_auto_load_toggle(home):
 def test_character_bundle_shape(home):
     bundle = character.character_bundle()
     assert set(bundle) == {"soul", "output", "skins", "current_skin", "skills", "auto_load", "presets", "revision"}
+
+
+def test_renaming_preserves_sections_and_updates_transport_identity(home):
+    from luna_core.cascade import character_identity, build_questions
+    before = character.read_soul()['sections']
+    character.write_soul(title='Mira')
+    assert character.read_soul()['sections'] == before
+    assert character_identity()[0] == 'Mira'
+    assert all('Luna' not in str(question) for question in build_questions())
+    assert character.named_soul('# Companion\nOriginal voice.', 'Mira') == '# Mira\nOriginal voice.'
+    before_bytes = (home / 'SOUL.md').read_text()
+    with pytest.raises(ValueError):
+        character.write_soul(title='Bad\nname')
+    assert (home / 'SOUL.md').read_text() == before_bytes

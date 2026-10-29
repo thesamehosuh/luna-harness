@@ -85,7 +85,8 @@ def test_background_review_matches_parent_toolset_config():
     )
 
 
-def test_background_review_installs_thread_local_whitelist():
+def test_background_review_installs_thread_local_whitelist(monkeypatch):
+    monkeypatch.setattr("tools.memory_tool.get_builtin_memory_store_flags", lambda *args: (True, False))
     """The review fork must install a memory/skills-only thread-local whitelist.
 
     The schema-level toolset narrowing was lifted (for prefix-cache parity),

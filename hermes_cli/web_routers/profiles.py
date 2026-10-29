@@ -894,6 +894,12 @@ async def update_profile_soul(name: str, body: ProfileSoulUpdate):
     soul_path = _resolve_profile_dir(name) / "SOUL.md"
 
     def _run():
+        from hermes_cli.product_runtime import enabled
+        if enabled():
+            with _config_profile_scope(_scope_profile_name(soul_path.parent)):
+                from luna_cli.character import write_soul_text
+                write_soul_text(body.content)
+            return
         from utils import atomic_write_text
         # Atomic: a bare write_text() truncates SOUL.md before the new body lands, and the
         # paired GET reports an unreadable file as "never set" — so an interrupted save would
@@ -905,6 +911,8 @@ async def update_profile_soul(name: str, body: ProfileSoulUpdate):
     try:
         # Temp file + fsync + replace blocks for as long as the filesystem takes to commit.
         await run_in_threadpool(_run)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
     except OSError as e:
         _log.exception("PUT /api/profiles/%s/soul failed", name)
         raise HTTPException(status_code=500, detail=f"Could not write SOUL.md: {e}")

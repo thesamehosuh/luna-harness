@@ -824,13 +824,14 @@ class TestBatchRefusesToEmptyNonEmptyStore:
 # =========================================================================
 
 class TestBackgroundReviewDeleteGate:
-    """An unattended background-review fork may append, never delete: the near-limit
+    """With memory.write_approval enabled, unattended deletions are staged: the near-limit
     'consolidate now' hint is otherwise an instruction to decide what to forget,
     executed with no human in the loop. Denied ops are staged as pending proposals
     (surfaced via /memory pending) instead of silently dropped — the fork's own review
     summary is never published back."""
 
     def test_remove_staged_not_applied(self, store, tmp_path, monkeypatch):
+        monkeypatch.setattr("tools.write_approval.write_approval_enabled", lambda category: True)
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         store.add("memory", "never create records without permission")
         token = set_current_write_origin("background_review")
@@ -852,6 +853,7 @@ class TestBackgroundReviewDeleteGate:
         assert record["origin"] == "background_review"
 
     def test_replace_staged_in_background_review(self, store, tmp_path, monkeypatch):
+        monkeypatch.setattr("tools.write_approval.write_approval_enabled", lambda category: True)
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         store.add("memory", "entry the fork must not rewrite")
         token = set_current_write_origin("background_review")
@@ -866,6 +868,7 @@ class TestBackgroundReviewDeleteGate:
         assert "entry the fork must not rewrite" in store._entries_for("memory")
 
     def test_batch_containing_remove_staged_whole_batch(self, store, tmp_path, monkeypatch):
+        monkeypatch.setattr("tools.write_approval.write_approval_enabled", lambda category: True)
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         store.add("memory", "rule one")
         token = set_current_write_origin("background_review")

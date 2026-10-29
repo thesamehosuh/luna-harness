@@ -16,6 +16,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { MemoryRouter } from "react-router";
 import type { ReactNode } from "react";
 
 import { BehaviourPower, ThresholdRow, WakePolicyCard } from "./BehaviourPage";
@@ -29,7 +30,7 @@ async function render(ui: ReactNode) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root.render(ui));
+  await act(async () => root.render(<MemoryRouter>{ui}</MemoryRouter>));
 }
 
 beforeEach(() => {
@@ -314,7 +315,7 @@ describe("Behaviour customization", () => {
     const data = editableBundle();
     await render(<WakePolicyCard behaviour={data} saving={false} onSave={onSave} />);
     await act(async () => setInputValue(registerArea(container), "my voice"));
-    await act(async () => root.render(<WakePolicyCard behaviour={{ ...data, enabled: false, revision: "new" }} saving={false} onSave={onSave} />));
+    await act(async () => root.render(<MemoryRouter><WakePolicyCard behaviour={{ ...data, enabled: false, revision: "new" }} saving={false} onSave={onSave} /></MemoryRouter>));
     expect(registerArea(container).value).toBe("my voice");
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Remove route local"]')!.click());
     await act(async () => container.querySelector<HTMLButtonElement>("[data-wake-policy-save]")!.click());

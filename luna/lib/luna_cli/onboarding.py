@@ -33,7 +33,7 @@ STEP_ORDER = ("provider", "telegram", "honcho", "character", "wake_test")
 STEP_TITLES = {
     "provider": "Chat model",
     "telegram": "Telegram bot & group",
-    "honcho": "Memory stack (Honcho)",
+    "honcho": "Conversation recall (Honcho)",
     "character": "Character",
     "wake_test": "First wake test",
 }
@@ -95,8 +95,8 @@ def set_choice(step: str, choice: str) -> Dict[str, Any]:
         text = settings.read(tune.config_path())
         text = write_config_value(text, ["luna", "setup", key], choice)
         if step == "honcho":
-            text = write_config_value(text, ["memory", "memory_enabled"], choice == "enabled")
-            text = write_config_value(text, ["memory", "user_profile_enabled"], choice == "enabled")
+            # Honcho's service choice must not overwrite the independent Hermes
+            # file-memory and people-maintenance choices in the Memory page.
             text = write_config_value(text, ["luna", "logger", "sync_honcho"], choice == "enabled")
         if step == "wake_test":
             # A live verification must explicitly enable wakes after it succeeds.
@@ -307,7 +307,9 @@ def check_character() -> Dict[str, Any]:
     soul = tune._home() / "SOUL.md"
     if soul.exists() and soul.read_text(encoding="utf-8", errors="replace").strip():
         first = soul.read_text(encoding="utf-8", errors="replace").strip().splitlines()[0][:80]
-        return _status(True, f"persona present: {first}", path=str(soul))
+        from luna_core.cascade import character_identity
+        name = character_identity()[0]
+        return _status(name != "Companion", f"persona present: {first}" if name != "Companion" else "Choose your companion's name", path=str(soul), name=name)
     return _status(False, "no persona yet; pick one below", path=str(soul))
 
 
@@ -363,7 +365,7 @@ def step_report() -> Dict[str, Any]:
         if key and choices.get(key) == "skipped":
             check = {"status": "skipped", "detail": "Skipped for now — you can enable this later", "optional": True}
         elif step_id == "honcho" and choices.get("memory") == "pending":
-            check = _status(False, "Optional: add long-term memory", optional=True)
+            check = _status(False, "Optional: add Honcho conversation recall; saved files have independent controls", optional=True)
         else:
             check = _CHECKS[step_id]()
         steps.append({"id": step_id, "title": STEP_TITLES[step_id], **check})

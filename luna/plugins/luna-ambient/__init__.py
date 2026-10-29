@@ -182,22 +182,21 @@ _LUNA_SECTION_MTIME = None
 def _luna_section() -> Dict[str, Any]:
     """The ``luna:`` block from $HERMES_HOME/config.yaml (mtime-cached, so a dashboard edit takes
     effect on the next poll instead of requiring a restart). Env vars still override."""
-    global _LUNA_SECTION, _LUNA_SECTION_MTIME
-    path = _home() / "config.yaml"
-    try:
-        mtime = (str(path), path.stat().st_mtime_ns)
-    except OSError:
-        mtime = -1.0
-    if _LUNA_SECTION is None or mtime != _LUNA_SECTION_MTIME:
-        try:
-            import yaml
-
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            _LUNA_SECTION = data.get("luna", {}) or {}
-        except Exception:
-            _LUNA_SECTION = {}
-        _LUNA_SECTION_MTIME = mtime
-    return _LUNA_SECTION
+    # The canonical loader already caches file signatures and applies the
+    # active profile, managed overrides and environment interpolation.
+    import copy
+    result = copy.deepcopy(config_read.section("luna", default={}) or {})
+    from hermes_cli.config import read_user_config_raw
+    from hermes_cli import managed_scope
+    explicit = ((read_user_config_raw().get("luna") or {}).get("ambient") or {})
+    ambient = result.get("ambient") or {}
+    if "watched_chats" not in explicit and not managed_scope.is_key_managed("luna.ambient.watched_chats"):
+        ambient.pop("watched_chats", None)  # Retain the pre-selection legacy room fallback.
+    raw_thresholds = explicit.get("thresholds") or {}
+    if ("message_max_emotional" in raw_thresholds and "message_max_venting" not in raw_thresholds
+            and not managed_scope.is_key_managed("luna.ambient.thresholds.message_max_venting")):
+        (ambient.get("thresholds") or {}).pop("message_max_venting", None)
+    return result
 
 
 def _cfg(path: str, default: Any = None) -> Any:
@@ -409,14 +408,18 @@ def _jev_overrides():
 
 def _jev_client() -> JevClient:
     from luna_core.jev import build_client, route_fingerprint
-    global _CLIENT_CACHE, _CLIENT_REVISION, _CLIENT_BUILT_AT
+    global _CLIENT_CACHE, _CLIENT_REVISION, _CLIENT_BUILT_AT, _JEV_PAUSE_UNTIL, _JEV_PAUSE_REASON
     config = _cfg("ambient.jev", {})
     overrides = _jev_overrides()
     revision = route_fingerprint(config, _jev_api_key, overrides)
     # Preserve a successful fallback for a cooldown instead of hammering the primary each scan.
-    if _CLIENT_CACHE is None or revision != _CLIENT_REVISION or time.monotonic() - _CLIENT_BUILT_AT >= 60:
+    changed = revision != _CLIENT_REVISION
+    previously_configured = bool(_CLIENT_REVISION)
+    if _CLIENT_CACHE is None or changed or time.monotonic() - _CLIENT_BUILT_AT >= 60:
         _CLIENT_CACHE = build_client(config, _jev_api_key, overrides=overrides)
         _CLIENT_REVISION, _CLIENT_BUILT_AT = revision, time.monotonic()
+        if changed and previously_configured:
+            _JEV_PAUSE_UNTIL, _JEV_PAUSE_REASON = 0.0, ""
     return _CLIENT_CACHE
 
 
@@ -1245,6 +1248,14 @@ def _poll_scope(gateway: Any = None, ctx: Any = None) -> None:
         if _JEV_PAUSE_UNTIL and _JEV_PAUSE_UNTIL <= time.monotonic():
             _clear_jev_pause()
         if _jev_paused():
+            # Building a client is local. A newly saved route/key must escape
+            # the old route's cooldown without waiting for its timer to expire.
+            try:
+                _jev_client()
+            except Exception:
+                _health(conn, "down", "Jev route configuration is invalid; review Behaviour")
+                return
+        if _jev_paused():
             _health(conn, "paused", _JEV_PAUSE_REASON)
             # Deliberately do not evaluate: the watermark stays put so nothing is skipped once jev
             # returns, and the indexer keeps tailing state.db meanwhile. The regex mention fallback
@@ -1361,10 +1372,11 @@ def _ensure_thread(gateway: Any) -> None:
         _STOP.clear()
         from luna_core.runtime import worker_context
         context = worker_context()
+        dry_run = context.run(_dry_run)
         _THREAD = threading.Thread(target=context.run, args=(_loop, {"gateway": gateway}),
                                    name="luna-ambient", daemon=True)
         _THREAD.start()
-        log.info("[luna-ambient] poller started (dry_run=%s)", _dry_run())
+        log.info("[luna-ambient] poller started (dry_run=%s)", dry_run)
 
 
 def _on_pre_gateway_dispatch(event: Any = None, gateway: Any = None, **kwargs: Any) -> None:
@@ -1439,7 +1451,9 @@ def _enabled():
 
 def _intent_revision():
     digest = hashlib.sha256()
-    for name in ("config.yaml", ".env"):
+    import json
+    digest.update(json.dumps(config_read.load_config(), sort_keys=True, default=str).encode())
+    for name in ("SOUL.md", ".env"):
         path = _home() / name
         if path.exists():
             digest.update(path.read_bytes())

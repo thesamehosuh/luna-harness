@@ -44,6 +44,7 @@ memory:
   memory_enabled: false
   user_profile_enabled: false
   write_approval: false
+  nudge_interval: 10
   memory_char_limit: 2200
   user_char_limit: 1375
   provider: luna-memory
@@ -234,10 +235,11 @@ platform_toolsets:
     - vision
     - web
   # The Telegram DM toolset below is for configured owner DMs. Group access is
-  # restricted separately by luna.access.group_toolsets (web + people by default).
+  # restricted separately by luna.access.group_toolsets (web + people + scoped memory by default).
   # Host actions remain approval-gated and operational notices route to the owner DM.
   telegram:
     - people
+    - luna_settings
     - clarify
     - code_execution
     - cronjob
@@ -278,7 +280,7 @@ luna:
     memory_budget_mib: 640
     timeout_seconds: 180
   access:
-    group_toolsets: [web, people]
+    group_toolsets: [web, people, memory]
     group_host_access: false
   character:
     name: ""  # Empty derives from the SOUL title.

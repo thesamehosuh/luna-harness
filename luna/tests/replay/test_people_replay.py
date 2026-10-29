@@ -11,7 +11,7 @@ from luna_core.room import build_room_block, record_inbound
 def test_same_person_in_two_rooms_never_carries_local_roles_between_them(tmp_path, monkeypatch):
     fixture = json.loads((Path(__file__).resolve().parents[1] / "fixtures/people/multiple_groups.json").read_text())
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text("memory: {memory_enabled: false}\n")
+    (tmp_path / "config.yaml").write_text("memory: {memory_enabled: false, user_profile_enabled: true}\n")
     conn = db.connect(tmp_path / "luna-state.db")
     db.init_db(conn)
     registry = IdentityRegistry(conn)

@@ -1011,6 +1011,7 @@ export default function ProfilesPage() {
               </div>
 
               <fieldset className="grid gap-3 border-t border-border pt-4">
+                {cloning && <p className="text-xs leading-relaxed text-muted-foreground">Saved note files can be copied. Honcho starts disconnected with its own workspace. Proactive wakes start off; connect chats and choose watched groups in the new profile.</p>}
                 <legend className="font-mondwest text-display text-xs tracking-wider text-muted-foreground">
                   {L.advancedOptions}
                 </legend>

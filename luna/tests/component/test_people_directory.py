@@ -15,7 +15,7 @@ from luna_core.room import build_room_block, record_inbound
 def directory(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setenv("LUNA_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text("memory: {memory_enabled: false}\ntelegram: {allow_admin_from: ['1']}\n")
+    (tmp_path / "config.yaml").write_text("memory: {memory_enabled: false, user_profile_enabled: true}\ntelegram: {allow_admin_from: ['1']}\n")
     conn = db.connect(str(tmp_path / "luna-state.db"))
     db.init_db(conn)
     registry = IdentityRegistry(conn)
@@ -94,7 +94,7 @@ def test_room_and_nonowner_dm_only_receive_relevant_people(directory, monkeypatc
     tool_context(monkeypatch, chat_type="dm", user_id="2")
     dm = call(action="list")["context"]
     assert "Alex" in dm and "Owner" not in dm
-    tool_context(monkeypatch, chat_type="dm", user_id="1")
+    tool_context(monkeypatch, chat_type="dm", chat_id="1", user_id="1")
     owner = call(action="list")["context"]
     assert "Alex" in owner and "Other room person" in owner
 

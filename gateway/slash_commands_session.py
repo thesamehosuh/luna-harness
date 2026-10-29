@@ -549,7 +549,7 @@ class GatewaySessionCommandsMixin:
         # the transport applies its default effort — a 400 on non-reasoning models.
         runtime_kwargs["reasoning_config"] = self._resolve_session_reasoning_config(source=source, model=model)
 
-        tmp_agent = await self._build_manual_compression_agent(session_entry.session_id, model, runtime_kwargs)
+        tmp_agent = await self._build_manual_compression_agent(session_entry.session_id, model, runtime_kwargs, source)
         try:
             # Not a bare run_in_executor: the profile secret scope is a contextvar the default
             # executor hop would drop, failing aux-client credential resolution closed.
@@ -571,7 +571,7 @@ class GatewaySessionCommandsMixin:
             await self._cleanup_agent_resources_off_loop(tmp_agent, context="manual compression")
         return "\n".join(_manual_compression_reply_lines(summary, compressor, request.focus_topic))
 
-    async def _build_manual_compression_agent(self, session_id: str, model, runtime_kwargs: dict):
+    async def _build_manual_compression_agent(self, session_id: str, model, runtime_kwargs: dict, source=None):
         """Build the throwaway AIAgent that performs a manual /compress rewrite of *session_id*."""
         from run_agent import AIAgent
         from gateway.run import _GATEWAY_HYGIENE_PLATFORM, _seed_hygiene_system_prompt
@@ -596,7 +596,12 @@ class GatewaySessionCommandsMixin:
         _checkpoint_required = _is_truthy(
             ((_load_cfg() or {}).get("compression") or {}).get("checkpoint_required"),
             default=False)
-        tmp_agent = AIAgent(**runtime_kwargs, model=model, max_iterations=4, quiet_mode=True,
+        scope_kwargs = {}
+        _compression_config = _load_cfg() or {}
+        if isinstance(_compression_config.get("luna"), dict):
+            from luna_core.surface_policy import agent_scope_kwargs
+            scope_kwargs = agent_scope_kwargs(_compression_config, source)
+        tmp_agent = AIAgent(**{**runtime_kwargs, **scope_kwargs}, model=model, max_iterations=4, quiet_mode=True,
                             skip_memory=not _checkpoint_required, enabled_toolsets=["memory"],
                             session_id=session_id,
                             session_db=getattr(self._session_db, "_db", self._session_db))

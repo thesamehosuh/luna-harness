@@ -73,6 +73,7 @@ export interface ThresholdWriteResult {
 }
 
 export interface ThresholdsWriteResponse {
+  revision?: string;
   results: Record<string, ThresholdWriteResult>;
   state: ThresholdsResponse;
 }
@@ -348,11 +349,11 @@ export const lunaApi = {
   getWakes: (limit = 50) =>
     fetchJSON<{ wakes: WakeRow[] }>(`/api/luna/wakes?limit=${limit}`),
   getThresholds: () => fetchJSON<ThresholdsResponse>("/api/luna/thresholds"),
-  setThresholds: (values: Record<string, unknown>) =>
+  setThresholds: (values: Record<string, unknown>, revision?: string) =>
     fetchJSON<ThresholdsWriteResponse>("/api/luna/thresholds", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ values }),
+      body: JSON.stringify({ values, revision }),
     }),
   getCost: (days = 0) => fetchJSON<CostResponse>(`/api/luna/cost?days=${days}`),
   replay: (limit = 25, recent = 10) =>

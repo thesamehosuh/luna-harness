@@ -660,7 +660,11 @@ def _hydrate_from_history(agent: Any, conversation_history: Optional[List[Any]])
 def _tick_memory_nudge(agent: Any) -> bool:
     """Advance the turn-based memory nudge counter; ``True`` when the review should fire."""
     if (agent._memory_nudge_interval > 0
-            and "memory" in agent.valid_tool_names
+            and ("memory" in agent.valid_tool_names or
+                 (getattr(agent._memory_store, "is_group_memory", False)
+                  and getattr(agent._memory_store, "people_enabled", False)
+                  and "people" in (agent.enabled_toolsets or [])
+                  and "people" not in (agent.disabled_toolsets or [])))
             and agent._memory_store):
         agent._turns_since_memory += 1
         if agent._turns_since_memory >= agent._memory_nudge_interval:
@@ -801,8 +805,15 @@ def _memory_turn_start_and_prefetch(
     """Notify memory providers of the new turn, then prefetch external memory once
     before the tool loop (skipped on trivial prompts with no semantic signal).
     Returns the prefetch text (``""`` when nothing was injected)."""
+    group_context = ""
+    group_reader = getattr(getattr(agent, "_memory_store", None), "turn_context_block", None)
+    if callable(group_reader):
+        try:
+            group_context = group_reader()
+        except Exception:
+            logger.warning("Group MEMORY.md could not be loaded", exc_info=True)
     if not agent._memory_manager:
-        return ""
+        return group_context
     from agent.message_content import flatten_message_text
     _query = flatten_message_text(original_user_message)
     # The author rides along so a provider can attribute THIS turn, not whoever opened the session.
@@ -824,7 +835,7 @@ def _memory_turn_start_and_prefetch(
             _recall_indicator = agent._memory_manager.describe_recall()
             if _recall_indicator:
                 agent._emit_status(_recall_indicator)
-    return ext_prefetch_cache
+    return "\n\n".join(part for part in (group_context, ext_prefetch_cache) if part)
 
 
 def _stamp_api_content_sidecar(

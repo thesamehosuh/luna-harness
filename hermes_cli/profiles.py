@@ -1081,6 +1081,11 @@ def create_profile(
             stripped = strip_channel_settings(staging, include_state=clone_all, source_dir=source_dir)
             if stripped:
                 logger.info("profile %s: cloned without messaging channels %s", canon, stripped)
+        if source_dir is not None:
+            from hermes_cli.product_runtime import enabled
+            if enabled():
+                from luna_core.profile_memory import detach_clone
+                detach_clone(staging, profile_dir)
         _finish_profile_layout(staging, no_skills=no_skills, clone_all=clone_all, description=description)
         os.rename(staging, profile_dir)
     except BaseException:

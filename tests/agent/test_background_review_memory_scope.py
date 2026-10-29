@@ -34,7 +34,8 @@ class TestReviewToolWhitelistScope:
         assert "memory" not in whitelist
         assert "skill_manage" in whitelist  # the skill review keeps its own surface
 
-    def test_memory_review_keeps_memory_tool(self):
+    def test_memory_review_keeps_memory_tool(self, monkeypatch):
+        monkeypatch.setattr("tools.memory_tool.get_builtin_memory_store_flags", lambda *args: (True, False))
         whitelist, _extra = bg._review_tool_whitelist(_review_agent(), None, review_memory=True)
         assert "memory" in whitelist
 
@@ -131,6 +132,7 @@ class TestConsolidationProposalSurfaces:
         return store
 
     def test_staged_proposal_surfaces_in_summary(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("tools.write_approval.write_approval_enabled", lambda category: True)
         import json
 
         from tools.memory_tool import memory_tool
@@ -161,6 +163,7 @@ class TestConsolidationProposalSurfaces:
         replace -> the delete gate stages it -> the proposal surfaces; the store never
         changed and nothing was silently lost."""
         import json
+        monkeypatch.setattr("tools.write_approval.write_approval_enabled", lambda category: True)
 
         from tools.memory_tool import memory_tool
         from tools.skill_provenance import set_current_write_origin, reset_current_write_origin
@@ -177,7 +180,7 @@ class TestConsolidationProposalSurfaces:
                 action="replace", old_text="seed entry one", content="merged entry", store=store)
         finally:
             reset_current_write_origin(token)
-        assert json.loads(add_raw)["success"] is False  # the budget still rejects the add
+        assert json.loads(add_raw)["staged"] is True  # approval is required before the store is mutated
         replace_result = json.loads(replace_raw)
         assert replace_result["staged"] is True and replace_result["proposal_staged"] is True
 

@@ -59,7 +59,7 @@ def update_honcho_aliases(
     honcho_path: str | Path,
     registry: IdentityRegistry,
     *,
-    host: str = "hermes",
+    host: Optional[str] = None,
     platform: Optional[str] = None,
 ) -> int:
     """Write the generated alias map into ``honcho.json`` under ``hosts.<host>.userPeerAliases``.
@@ -71,13 +71,22 @@ def update_honcho_aliases(
     ``luna_identity`` registry: ``session_peers`` consults ``userPeerAliases`` before generating
     its own (differently-suffixed) peer id, so a complete, fresh map means one human, one peer.
     """
+    if host is None:
+        from plugins.memory.honcho.client import resolve_active_host
+        host = resolve_active_host()
+    from hermes_cli.config_lock import settings_lock
     path = Path(honcho_path)
+    with settings_lock(path.parent):
+        return _write_honcho_aliases(path, registry, host, platform)
+
+
+def _write_honcho_aliases(path, registry, host, platform):
     data: Dict[str, Any] = {}
     if path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8")) or {}
-        except (OSError, ValueError):
-            data = {}
+        except (OSError, ValueError) as exc:
+            raise ValueError("Honcho identity configuration could not be read; it was left unchanged") from exc
     hosts = data.setdefault("hosts", {})
     entry = hosts.setdefault(host, {})
     aliases = generate_alias_map(registry, platform)
@@ -85,9 +94,8 @@ def update_honcho_aliases(
         return len(aliases)
     entry["userPeerAliases"] = aliases
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    from luna_core.settings import _replace
+    _replace(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     return len(aliases)
 
 

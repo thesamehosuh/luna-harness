@@ -82,6 +82,14 @@ def render_soul(parsed: Dict[str, Any]) -> str:
     return "".join(parts).rstrip() + "\n"
 
 
+def named_soul(text, name):
+    name = str(name or "").strip()
+    if not name or len(name) > 80 or any(ord(char) < 32 for char in name):
+        raise configedit.ConfigEditError("Choose a companion name of 1–80 characters on one line")
+    first, separator, rest = text.partition("\n")
+    return f"# {name}\n" + (rest if first.startswith("# ") else text)
+
+
 def read_soul() -> Dict[str, Any]:
     path = soul_path()
     raw = settings.read(path) if settings.exists(path) else ""
@@ -112,6 +120,7 @@ def write_soul(*, title: Optional[str] = None, intro: Optional[str] = None,
     for section in updated["sections"]:
         if not str(section.get("title") or "").strip():
             raise configedit.ConfigEditError("every persona section needs a title")
+    named_soul("", updated["title"])
     path = soul_path()
     settings.write(path, render_soul(updated))
     _write_character_name(updated["title"])
@@ -123,10 +132,11 @@ def write_soul_text(text: str) -> Dict[str, Any]:
     """Replace the persona from raw markdown (preset application)."""
     if not str(text or "").strip():
         raise configedit.ConfigEditError("persona text is empty")
-    settings.write(soul_path(), text.rstrip() + "\n")
     title = parse_soul(text).get("title")
     if title:
+        named_soul("", title)
         _write_character_name(title)
+    settings.write(soul_path(), text.rstrip() + "\n")
     return read_soul()
 
 

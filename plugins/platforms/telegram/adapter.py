@@ -5973,9 +5973,14 @@ class TelegramAdapter(BasePlatformAdapter):
         if event.message_type == MessageType.COMMAND:
             # Commands keep the original source (user_id) so _check_slash_access can identify the sender.
             return dataclasses.replace(event, channel_prompt=channel_prompt)
+        from hermes_cli.product_runtime import enabled as luna_enabled
+        # Luna supplies bounded room context through its sidecar. Keep the
+        # verified sender and let the configured per-person/topic session policy
+        # select the lane, exactly as it does for /new and other commands.
+        live_source = event.source if luna_enabled() else self._telegram_group_observe_shared_source(event.source)
         return dataclasses.replace(
             event, text=self._telegram_group_observe_attributed_text(event),
-            source=self._telegram_group_observe_shared_source(event.source), channel_prompt=channel_prompt)
+            source=live_source, channel_prompt=channel_prompt)
 
     def _media_message_type(self, msg: Message) -> MessageType:
         """Classify a Telegram media message into a MessageType (first present attachment wins)."""

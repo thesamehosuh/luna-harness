@@ -151,3 +151,14 @@ def test_backfill_includes_lunas_own_rows(env):
     assert result.written == 3
     msgs = fake.session(ROOM).msgs
     assert any(m["peer"] == "luna" and "obviously" in m["content"] for m in msgs)
+
+
+def test_topic_outboxes_never_copy_other_topics_into_their_sessions(env):
+    conn, registry, store, fake = env
+    conn.execute("UPDATE messages SET thread_id='9' WHERE message_id='m2'")
+    conn.commit()
+    main = backfill_room(store, conn, chat_id=CHAT, room_session='public-main', thread_id='', registry=registry)
+    topic = backfill_room(store, conn, chat_id=CHAT, room_session='public-topic-9', thread_id='9', registry=registry)
+    assert main.written == 1 and topic.written == 1
+    assert [msg['content'] for msg in fake.session('public-main').msgs] == ['anyone up for pizza?']
+    assert [msg['content'] for msg in fake.session('public-topic-9').msgs] == ['always']

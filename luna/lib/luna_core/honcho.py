@@ -40,6 +40,23 @@ def sanitize_session_id(session_id: str) -> str:
     return cleaned or "room"
 
 
+def public_room_session(platform, chat_id, thread_id=""):
+    """Stable public group history, preserving existing knowledge across upgrades.
+
+    Public recall may span topics. File notes, live context and wake dispatch
+    remain topic-scoped; message metadata retains each original topic.
+    """
+    from luna_core import config_read
+    from luna_core.identity import normalize_platform
+    from luna_core.runtime import getenv
+    primary = str(getenv("LUNA_CHAT_ID") or config_read.section("luna", "room", "chat_id", default="") or "")
+    if not primary:
+        allowed = config_read.section("telegram", "group_allowed_chats", default=[]) or []
+        primary = str(allowed[0]) if len(allowed) == 1 else ""
+    base = str(getenv("LUNA_ROOM_SESSION_KEY") or "") if str(chat_id) == primary else ""
+    return base or f"agent:main:{normalize_platform(platform)}:group:{chat_id}"
+
+
 @dataclass
 class RoomSyncResult:
     peers: int = 0
@@ -115,6 +132,21 @@ class HonchoStore:
         return self.client().session(sanitize_session_id(session_id)).context(**kwargs)
 
 
+def owned_host_block(raw, host=None):
+    """Host settings from this home's own honcho.json, including its legacy seed.
+
+    Named profiles historically received a local `hermes` block, while the
+    engine selects `hermes_<profile>`. Merge that local seed under the selected
+    block; never read a different home's file to supply this fallback.
+    """
+    if host is None:
+        from plugins.memory.honcho.client import resolve_active_host
+        host = resolve_active_host()
+    hosts = raw.get("hosts") or {}
+    active = hosts.get(host) or hosts.get(host.replace("hermes_", "hermes.", 1)) or {}
+    return {**(hosts.get("hermes") or {}), **active}
+
+
 def connection_settings():
     """One profile-owned connection resolver for recall, room writes and health checks."""
     from luna_core import config_read
@@ -122,12 +154,12 @@ def connection_settings():
     import json
     path = home() / "honcho.json"
     raw = json.loads(path.read_text()) if path.exists() else {}
-    host = (raw.get("hosts") or {}).get("hermes") or {}
+    host = owned_host_block(raw)
     cfg = config_read.section("honcho", default={}) or {}
     return {
         "workspace": getenv("LUNA_HONCHO_WORKSPACE") or cfg.get("workspace") or host.get("workspace") or raw.get("workspace") or "luna",
         "base_url": getenv("LUNA_HONCHO_BASE_URL") or cfg.get("baseUrl") or cfg.get("base_url") or host.get("baseUrl") or raw.get("baseUrl") or "http://localhost:8000",
-        "api_key": getenv("HONCHO_API_KEY") or None,
+        "api_key": getenv("HONCHO_API_KEY") or host.get("apiKey") or raw.get("apiKey") or None,
         "timeout": float(getenv("LUNA_HONCHO_TIMEOUT") or cfg.get("timeout") or raw.get("timeout") or 30),
     }
 
@@ -193,6 +225,7 @@ def backfill_room(
     *,
     chat_id: str,
     room_session: str,
+    thread_id: Optional[str] = None,
     platform: str = "telegram",
     limit: int = 500,
     registry: Optional[IdentityRegistry] = None,
@@ -208,8 +241,11 @@ def backfill_room(
     result = RoomSyncResult(session=sanitize_session_id(room_session))
     destination = hashlib.sha256(f"{store.base_url}|{store.workspace}|{result.session}".encode()).hexdigest()
     at = (now or datetime.now(timezone.utc)).isoformat()
+    topic_filter = " AND COALESCE(thread_id,'')=?" if thread_id is not None else ""
+    topic_args = (str(thread_id),) if thread_id is not None else ()
     conn.execute("""INSERT OR IGNORE INTO memory_outbox(destination, chat_id, message_id, enqueued_at)
-        SELECT ?, chat_id, message_id, ? FROM messages WHERE chat_id=? AND (is_bot=0 OR peer_id='luna')""", (destination, at, str(chat_id)))
+        SELECT ?, chat_id, message_id, ? FROM messages WHERE chat_id=? AND (is_bot=0 OR peer_id='luna')""" + topic_filter,
+        (destination, at, str(chat_id), *topic_args))
     conn.commit()
     from luna_core.db import get_meta, set_meta
     retry_key = "memory_retry:" + destination
@@ -272,7 +308,8 @@ def backfill_room(
             continue
         try:
             created = datetime.fromisoformat(row["timestamp"]) if row["timestamp"] else None
-            store.add_message(room_session, peer_id, row["content"] or "", metadata={"message_id": mid, "chat_id": str(chat_id), "source": "room-outbox"}, created_at=created)
+            store.add_message(room_session, peer_id, row["content"] or "", metadata={"message_id": mid, "chat_id": str(chat_id),
+                "thread_id": str(row["thread_id"] or ""), "source": "room-outbox"}, created_at=created)
             conn.execute("UPDATE memory_outbox SET state='delivered', last_error=NULL WHERE destination=? AND chat_id=? AND message_id=?", key)
             conn.commit()
             result.written += 1

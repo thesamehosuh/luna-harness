@@ -478,17 +478,24 @@ class HonchoClientConfig:
                 from hermes_cli.config import read_user_config_raw
                 tuning = read_user_config_raw().get("honcho") or {}
                 raw = copy.deepcopy(result.raw or {})
-                merged = {**_host_block(raw, result.host), **tuning}
+                from luna_core.honcho import owned_host_block
+                local_path = get_hermes_home() / "honcho.json"
+                owned = result.config_path is not None and result.config_path.resolve() == local_path.resolve()
+                base = owned_host_block(raw, result.host) if owned else _host_block(raw, result.host)
+                merged = {**base, **tuning}
                 for key, value in _behavior_fields(_HostLookup(merged, raw), result.explicitly_configured).items():
                     setattr(result, key, value)
                 raw.setdefault("hosts", {})[result.host] = merged
                 result.raw = raw
+                if merged.get("aiPeer"):
+                    result.ai_peer = merged["aiPeer"]
                 from luna_core.honcho import connection_settings
                 connection = connection_settings()
                 result.base_url = connection["base_url"]
                 result.workspace_id = connection["workspace"]
                 result.api_key = connection["api_key"] or result.api_key
                 result.timeout = connection["timeout"]
+                result.enabled = _HostLookup(merged, raw).flag("enabled", default=bool(result.api_key or result.base_url))
         except ImportError:
             pass
         return result

@@ -200,7 +200,7 @@ def test_group_capabilities_and_public_memory(homes):
     from luna_core.surface_policy import toolsets
     source = SimpleNamespace(chat_type='group', user_id='owner')
     config = {'luna': {}, 'telegram': {'allow_admin_from': ['owner']}}
-    assert toolsets(config, source, ['web', 'terminal', 'memory', 'file']) == ['web']
+    assert toolsets(config, source, ['web', 'terminal', 'memory', 'file']) == ['memory', 'web']
     source.chat_type = 'dm'
     assert toolsets(config, source, ['web', 'terminal']) == ['web', 'terminal']
     source.user_id = 'stranger'
@@ -340,14 +340,14 @@ def test_private_files_are_never_loaded_for_group_or_nonowner_dm(homes):
     (homes / 'memories').mkdir()
     (homes / 'memories/MEMORY.md').write_text('owner-private-synthetic-fact')
     (homes / 'memories/USER.md').write_text('owner-private-synthetic-profile')
-    config = {'luna': {}, 'memory': {'memory_enabled': True, 'user_profile_enabled': True}, 'telegram': {'allow_admin_from': ['owner']}}
+    config = {'luna': {}, 'memory': {'memory_enabled': True, 'user_profile_enabled': True}, 'telegram': {'allow_admin_from': ['1']}}
     def agent(chat_type, user_id):
-        return SimpleNamespace(enabled_toolsets=['web'], disabled_toolsets=[], tools=[], _chat_type=chat_type, _user_id=user_id)
-    group = agent('group', 'owner');_init_memory(group, config, False, 'telegram')
+        return SimpleNamespace(enabled_toolsets=['web'], disabled_toolsets=[], tools=[], _chat_type=chat_type, _user_id=user_id, _chat_id=user_id if chat_type == 'dm' else '-101')
+    group = agent('group', '1');_init_memory(group, config, False, 'telegram')
     assert group._memory_store is None
     visitor = agent('dm', 'visitor');_init_memory(visitor, config, False, 'telegram')
     assert visitor._memory_store is None
-    owner = agent('dm', 'owner');_init_memory(owner, config, False, 'telegram')
+    owner = agent('dm', '1');_init_memory(owner, config, False, 'telegram')
     assert owner._memory_store is not None
     assert owner._memory_store.memory_entries == ['owner-private-synthetic-fact']
 

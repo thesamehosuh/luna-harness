@@ -25,7 +25,7 @@ Everything runs self-hosted: your model provider key, your server, your chat his
 outside services you need are the model itself and your chat platform.
 
 Character sets who your companion is and how they talk. Behaviour sets when they speak up.
-People sets who is who in the room. Fresh profiles use the placeholder Companion until you name
+People keeps one identity per person, with group-specific names and roles. Groups brings each room’s people and notes together. Memory controls file maintenance and conversation recall. Fresh profiles use the placeholder Companion until you name
 your character. The optional Luna example persona is one character, not the harness's fixed identity.`,
   },
   {
@@ -123,36 +123,64 @@ memory, wakes and automatic startup are choices you make during setup.`,
     body: `Luna identifies people by their transport ids (a Telegram user id, for example). It never
 guesses identity from display names or message text.
 
-The People page is the registry. Unmapped members (seen in the room, no row yet) show up in the
-audit; add facts for them (name, pronouns, role, aliases). Manual facts always win over anything
-derived and are marked manual. Merge folds a second runtime id (an alt account) into one human,
-one peer. Sync to Honcho materialises the alias map and peer cards the memory layer reasons over.
+The People page starts with shared basic details for everyone. Choose a group to view or edit the
+name, aliases, pronouns and short role used in that room. Each row links to the groups where that
+person has been observed. Saving a group entry changes that room only; shared basics remain
+available elsewhere. Use shared basic details removes a group override.
 
-If two accounts look like the same person to you, that is what the merge button is for.
+PEOPLE.md is a local directory that works without Honcho. The companion can maintain it during
+conversation and periodic memory reviews. Model updates stay in the group or DM where they were
+learned. It contains basic reference data, not biographies or secrets. The Memory page controls
+whether people maintenance is enabled. Basic entry updates do not require approval.
 
-PEOPLE.md is a small local fallback that still works if Honcho is off or unavailable. Your companion can
-maintain names, aliases, pronouns and short roles with the people tool. It is basic reference data,
-not detailed memory; the companion is told not to invent facts or store biographies there.
+Identity tools are under Local directory and identity tools. Merge accounts only when you know
+both verified platform IDs belong to one person. Recovery requires a private data backup.
+Sync basic identity cards to Honcho updates the memory layer’s identity references.
 
-One Telegram ID follows the same person across groups. Model updates stay in the group or DM where
-they were learned, so a nickname from one room is not carried into another. Group context includes
-only people observed in that room. The People page shows the local directory; private data backups
-include it, while shareable profile exports leave it out.`,
+People and group notes are included in private data backups and excluded from shareable profiles.`,
   },
   {
     id: "memory",
     title: "Memory",
-    body: `Memory is a local Honcho stack with its own database on your machine. Bring it up from
-the Setup page. Luna writes and recalls through it with strict rules.
+    body: `Your companion has saved Markdown files and optional Honcho conversation recall. They are
+controlled independently on the Memory page. Turning Honcho off leaves saved files and their
+maintenance settings intact.
 
-Everything is attributed to a person, never to a blob of chat. What matters (preferences, facts
-people share about themselves, commitments) is promoted; small talk is not stored as fact.
-Recalled context has a hard character ceiling per turn, so a long history can never crowd out the
-current conversation. Write approval (Config, memory section) can require your sign-off before
-anything is written.
+In your owner DM, USER.md holds your profile and MEMORY.md holds private durable notes. Each group
+and topic has its own public MEMORY.md and scoped PEOPLE.md entries. Group notes, people and
+private files use the same file-memory flags, character limits, review interval and
+background-review model settings. The companion can save useful facts during conversation and
+review them periodically. With file-write approval off, it can add, replace, remove and consolidate
+notes without approval. A zero review interval or disabled background reviews stops periodic reviews;
+conversation-time updates can still happen.
 
-Retention of the raw message index is configurable (Config, companion section, data) and is
-enforced automatically while the gateway runs.`,
+Honcho runs locally in Docker and recalls relevant conversation knowledge. Attribution comes from
+verified platform IDs. Public group recall can span topics; the current conversation and saved note files stay topic-specific. Recall is bounded per turn.
+
+Open Groups to read or edit a room’s notes and people. Dashboard saves detect concurrent companion
+updates and ask you to reload rather than overwrite them. Retention controls apply to the raw
+message index; durable notes remain until edited or removed.`,
+  },
+  {
+    id: "groups",
+    title: "Groups, DMs and private reads",
+    body: `Groups is the home for each room’s public notes and people. Topics are separate scopes.
+Channels manages chat connections and admission. Behaviour manages when your companion speaks.
+Memory holds the shared maintenance and recall controls.
+
+A group automatically receives only its own notes and observed people. Your owner DM can look up
+any saved group’s notes and people when needed, without automatically loading them into DM context.
+Private reads in your owner DM need no approval.
+
+To read your private USER.md or MEMORY.md from a group, the companion must request one-read
+approval in your owner DM. The card shows the exact excerpt and destination group/topic. Share this
+excerpt permits that snapshot only. Keep private, no response or an expired request shares nothing.
+There is no always-allow option, and a group’s own approve command cannot unlock this request.
+An approved excerpt may remain in the group conversation or be saved in its memory.
+
+Setup makes the designated Telegram owner an admin in DMs and groups. Managed-bot setup uses the
+owner verified by Telegram. Starting a DM alone does not grant ownership or admin access. Private
+memory approvals always use that owner’s DM, regardless of the notification destination.`,
   },
   {
     id: "privacy",
@@ -177,6 +205,7 @@ a watched group is recorded in full so the companion has room context for decidi
 Turn observation off to stop collecting unmentioned messages and the related proactive wakes.
 • Message history and memory: the indexed room log, session transcripts, and the Honcho memory
 store (people, commitments, preferences — small talk is not promoted to fact).
+• Saved files: private USER.md and MEMORY.md, scoped group MEMORY.md notes and PEOPLE.md entries.
 • Identities: a per-peer record derived from Telegram ids, plus names, pronouns, and roles you set
 on the People page.
 • Operational logs: wake verdicts, provider usage, errors. Wake logs record ids, reasons, and
@@ -207,7 +236,7 @@ Set operator chat (Config → companion → notify) to your DM chat id and these
 there instead of in the group, so approval never depends on a group member seeing them.
 
 The toolsets per surface are an explicit allowlist (Config, toolsets). Fresh group defaults allow
-web tools and the scoped people directory. The owner's DM supports the broader assistant toolkit.
+web tools, scoped people and group memory. Private-file requests require separate owner-DM approval. The owner's DM supports the broader assistant toolkit.
 Actions requiring approval
 raise an approval prompt that routes to the operator DM, and chat surfaces can never create
 shell-backed cron jobs.

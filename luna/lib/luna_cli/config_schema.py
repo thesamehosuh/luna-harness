@@ -222,7 +222,7 @@ _STATIC: Dict[str, Dict[str, Any]] = {
         "to it, and loses the ability to chime in unprompted.",
     ),
     "luna.room.chat_id": _text(
-        "Group chat id whose room block is staged each turn (blank = telegram.group_allowed_chats single entry).",
+        "Legacy main group binding and memory-session alias. Every admitted group gets its own room context; choose proactive groups in Behaviour.",
     ),
     "luna.room.max_lines": _num("Room lines staged per turn.", minimum=1, maximum=200, step=1),
     "luna.room.max_chars": _num("Character budget of the room block.", minimum=100, maximum=20000, step=1),
@@ -434,7 +434,7 @@ LUNA_SCHEMA_FIELDS.update({
     "luna.data.backup_days": _num("Backup archive retention in days (0 keeps all).", minimum=0, maximum=365, step=1),
     "luna.opencode.memory_budget_mib": _num("Native worker memory budget (320 MiB reserved per worker; at most four workers).", minimum=320, maximum=1280, step=320),
     "luna.access.group_host_access": _bool("Allow group members to use host tools. Owner opt-in; grant only to a trusted room."),
-    "luna.access.group_toolsets": _list("Group capabilities; defaults permit web search and the scoped basic people directory."),
+    "luna.access.group_toolsets": _list("Group capabilities: web, scoped people, and room file memory. Private owner file reads always require one-use owner-DM approval."),
     "luna.conversation.enabled": _bool("Choose one reply at a time in each group/topic, with bounded bursts and a fixed recipient."),
     "luna.conversation.settle_seconds": _num("Gather a short incoming burst before choosing a question.", minimum=0, maximum=3, step=0.1),
     "luna.conversation.response_gap_seconds": _num("Minimum pause after a group reply before another answer.", minimum=0, maximum=30, step=0.5),

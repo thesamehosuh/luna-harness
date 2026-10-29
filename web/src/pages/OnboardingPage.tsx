@@ -10,7 +10,8 @@ import { Toast } from "@nous-research/ui/ui/components/toast";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { errorMessage } from "@/lib/api-error";
 import { runGatewayAction } from "@/lib/gateway-lifecycle";
-import { api, getManagementProfile } from "@/lib/api";
+import { api } from "@/lib/api";
+import { lunaApi } from "@/lib/luna-api";
 import OpenCodeSetup from "@/components/OpenCodeSetup";
 import { LunaMark } from "@/components/LunaMark";
 import { OAuthProvidersCard } from "@/components/OAuthProvidersCard";
@@ -37,7 +38,7 @@ const PROVIDER_PRESETS: Array<{ label: string; provider: string; baseUrl: string
 const STEP_UI: Record<string, { label: string; title: string; icon: typeof Brain }> = {
   provider: { label: "Model", title: "Choose a model", icon: Zap },
   telegram: { label: "Telegram", title: "Connect Telegram", icon: MessageCircle },
-  honcho: { label: "Memory", title: "Add memory", icon: Brain },
+  honcho: { label: "Honcho", title: "Add conversation recall", icon: Brain },
   character: { label: "Character", title: "Choose a character", icon: UserRound },
   wake_test: { label: "Wakes", title: "Try self-wakes", icon: Moon },
 };
@@ -71,6 +72,7 @@ export default function OnboardingPage() {
   const [telegram, setTelegram] = useState({ token: "", chatId: "", adminId: "" });
   const [telegramResult, setTelegramResult] = useState("");
   const [telegramHome, setTelegramHome] = useState<"owner" | "group" | "keep">("owner");
+  const [companionName, setCompanionName] = useState("");
   const [personaId, setPersonaId] = useState("generic");
   const { toast, showToast } = useToast();
   const { setEnd } = usePageHeader();
@@ -82,6 +84,8 @@ export default function OnboardingPage() {
       const report = await onboardingApi.get();
       setLoadError("");
       setSteps(report.steps);
+      const identity = report.steps.find(step => step.id === "character");
+      setCompanionName(previous => previous || (identity?.name && identity.name !== "Companion" ? String(identity.name) : ""));
       setActiveStep(previous => previous || firstIncomplete(report.steps) || report.steps[0]?.id || null);
       const messaging = report.steps.find(step => step.id === "telegram");
       if (messaging) setTelegram(previous => ({ ...previous,
@@ -235,10 +239,12 @@ export default function OnboardingPage() {
 
   const applyPersona = async () => {
     const preset = personas.find((p) => p.id === personaId);
-    if (!preset) return;
+    if (!preset || !companionName.trim()) return;
     setBusy("character");
     try {
-      await api.updateProfileSoul(getManagementProfile() || "default", preset.content);
+      const name = companionName.trim();
+      const text = preset.content.startsWith("# ") ? preset.content.replace(/^# [^\n]*/, () => `# ${name}`) : `# ${name}\n\n${preset.content}`;
+      await lunaApi.saveCharacter({ soul_text: text });
       showToast("Persona applied", "success");
       await refresh();
     } catch (e) {
@@ -365,22 +371,26 @@ export default function OnboardingPage() {
             <div className="flex items-center justify-between gap-3"><label htmlFor="telegram-setup-token" className="text-sm font-medium">Bot token</label><a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="onboarding-quiet-link">Create a bot ↗</a></div>
             <div className="onboarding-token-row"><MessageCircle className="h-5 w-5 text-primary" aria-hidden="true" /><input id="telegram-setup-token" aria-label="Bot token" className={inputClass} type="password" autoComplete="off" placeholder={current.token_present ? "Bot token saved securely" : "123456:ABC…"} value={telegram.token} onChange={event => setTelegram({ ...telegram, token: event.target.value })} /></div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Your Telegram user ID · default admin"><input className={inputClass} inputMode="numeric" placeholder="123456789" value={telegram.adminId} onChange={event => setTelegram({ ...telegram, adminId: event.target.value })} /></Field>
+              <Field label="Your Telegram user ID · owner"><input className={inputClass} inputMode="numeric" placeholder="123456789" value={telegram.adminId} onChange={event => setTelegram({ ...telegram, adminId: event.target.value })} /></Field>
               <Field label="Group chat ID"><input className={inputClass} inputMode="text" placeholder="-100…" value={telegram.chatId} onChange={event => setTelegram({ ...telegram, chatId: event.target.value })} /></Field>
             </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">The owner automatically gets admin access in DMs and groups. Requests to share private memory always go to the owner’s DM, even when notifications go elsewhere.</p>
             <Field label="Notifications"><Select label="Telegram notification home" value={telegramHome} onValueChange={value => setTelegramHome(value as "owner" | "group" | "keep")} options={[{ value: "owner", label: "Your DM" }, { value: "group", label: "Your group · visible to everyone" }, ...(current.home_chat_id ? [{ value: "keep", label: "Keep saved home" }] : [])]} /></Field>
             <div className="onboarding-card-actions"><Link to="/channels" className="onboarding-quiet-link">Connections<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={saveTelegram} disabled={busy !== null || !/^[1-9]\d*$/.test(telegram.adminId.trim()) || !/^-[1-9]\d*$/.test(telegram.chatId.trim()) || (!telegram.token.trim() && current.token_present !== true)}>{busy === "telegram" ? "Connecting…" : "Save & connect"}</Button></div>
             {telegramResult && <p role="status" className="text-sm text-muted-foreground">{telegramResult}</p>}
           </div>}
           {current.id === "honcho" && <div className="space-y-5">
+            <p className="text-sm leading-relaxed text-muted-foreground">Honcho adds conversation recall. Private and group Markdown notes have their own controls in Memory and continue to work without Honcho.</p>
             <MemoryReasoningSelector key={modelRevision} compact />
             <div className="onboarding-card-actions">
               <Link to="/memory" className="onboarding-quiet-link">Memory settings</Link>
-              <Button onClick={startHoncho} disabled={busy !== null}>{busy === "honcho" && <Spinner className="mr-2 h-4 w-4" />}{busy === "honcho" ? "Setting up memory…" : "Set up memory"}</Button>
+              <Button onClick={startHoncho} disabled={busy !== null}>{busy === "honcho" && <Spinner className="mr-2 h-4 w-4" />}{busy === "honcho" ? "Setting up Honcho…" : "Set up Honcho"}</Button>
             </div>
-            {busy === "honcho" ? <p role="status" className="text-sm">{memoryProgress || "Preparing memory…"}</p> : null}
+            {busy === "honcho" ? <p role="status" className="text-sm">{memoryProgress || "Preparing Honcho…"}</p> : null}
           </div>}
           {current.id === "character" && <div className="space-y-5">
+            <Field label="What is your companion’s name?"><input className={inputClass} value={companionName} maxLength={80} placeholder="Choose a name" autoComplete="off" onChange={event => setCompanionName(event.target.value)} /></Field>
+            <p className="text-xs leading-relaxed text-muted-foreground">This name identifies your companion in chat and wake decisions. A persona sets their voice; you can change either later in Character.</p>
             <div className="onboarding-personas" role="radiogroup" aria-label="Character preset">
               {personas.map(persona => <label key={persona.id} data-selected={personaId === persona.id}>
                 <input className="sr-only" type="radio" name="persona" checked={personaId === persona.id} onChange={() => setPersonaId(persona.id)} />
@@ -390,7 +400,7 @@ export default function OnboardingPage() {
               </label>)}
             </div>
             {personas.find(persona => persona.id === personaId) && <details><summary className="onboarding-disclosure">View persona</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-sm text-muted-foreground">{personas.find(persona => persona.id === personaId)?.content}</pre></details>}
-            <div className="onboarding-card-actions"><Link to="/character" className="onboarding-quiet-link">Write your own<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={applyPersona} disabled={busy !== null || !personas.length}>Apply persona</Button></div>
+            <div className="onboarding-card-actions"><Link to="/character" className="onboarding-quiet-link">Write your own<ArrowRight className="h-3.5 w-3.5" /></Link><Button onClick={applyPersona} disabled={busy !== null || !personas.length || !companionName.trim()}>Apply persona</Button></div>
           </div>}
           {current.id === "wake_test" && <div className="space-y-5">
             <Field label="OpenCode Zen key"><input className={inputClass} type="password" autoComplete="off" placeholder="Optional if already connected" value={wakeKey} onChange={event => setWakeKey(event.target.value)} /></Field>

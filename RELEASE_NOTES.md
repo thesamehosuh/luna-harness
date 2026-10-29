@@ -1,3 +1,15 @@
+# Luna 0.1.0-alpha.11
+
+- Give each group and topic its own `MEMORY.md` and `PEOPLE.md` entries, while keeping private owner notes scoped to owner DMs.
+- Improve group recall and preserve transport-confirmed people when Luna observes unmentioned messages.
+- Add dashboard editors for `MEMORY.md`, `USER.md`, `PEOPLE.md` and group notes, with conflict protection and direct links from People and Groups.
+- Make memory and people controls easier to find across Memory, Groups, People, Behaviour and Setup.
+- Use the configured companion name throughout the default identity and wake behavior.
+- Fix ambient worker startup so profile-specific settings load within the correct profile scope.
+
+These are unsigned alpha previews. macOS requires version 14 or newer. Windows remains a preview.
+See the release evidence and platform limitations before installing.
+
 # Luna 0.1.0-alpha.10
 
 - Check for published Luna releases and install verified runtime updates from the dashboard.

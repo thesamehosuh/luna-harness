@@ -94,6 +94,7 @@ const SystemPage = lazy(() => import("@/pages/SystemPage"));
 const ChatPage = lazy(() => import("@/pages/ChatPage"));
 const BehaviourPage = lazy(() => import("@/pages/BehaviourPage"));
 const PeoplePage = lazy(() => import("@/pages/PeoplePage"));
+const GroupsPage = lazy(() => import("@/pages/GroupsPage"));
 const MemoryPage = lazy(() => import("@/pages/MemoryPage"));
 const OnboardingPage = lazy(() => import("@/pages/OnboardingPage"));
 const CharacterPage = lazy(() => import("@/pages/CharacterPage"));
@@ -170,6 +171,7 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/help": HelpPage,
   "/behaviour": BehaviourPage,
   "/people": PeoplePage,
+  "/groups": GroupsPage,
   "/memory": MemoryPage,
   "/files": FilesPage,
   "/analytics": AnalyticsPage,

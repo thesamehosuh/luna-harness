@@ -386,15 +386,6 @@ def _inject(event: Any, gateway: Any, session_store: Any) -> None:
     sid = _session_id(session_store, source)
     if sid:
         _remember_surface(sid, {"surface": "group", "chat_id": chat_id, "thread_id": topic})
-    if chat_id != _chat_id():
-        if not _looks_like_command(event):
-            allowed = people.allowed_ids(registry, platform=platform, chat_type="group", chat_id=chat_id, user_id=observed_uid, thread_id=topic, config=config_read.load_config())
-            directory = people.context(registry, platform, allowed, chat_type="group", chat_id=chat_id, thread_id=topic)
-            if directory:
-                _install_append_staging(gateway)
-                _stage_turn_note(gateway, _session_key(gateway, source, session_store), directory)
-                setattr(event, "_luna_room_injected", True)
-        return
     if _looks_like_command(event):
         # Commands keep their own source/text (engine edit 0001) and get no room block — but they are
         # messages the room saw (so index them), their *output* must obey the group hard limits,
@@ -650,8 +641,14 @@ def _on_pre_llm_call(platform="", **kwargs):
 
 
 def register(ctx) -> None:
+    from luna_core.group_memory import TOOL_SCHEMA as group_schema, tool_handler as group_handler
+    from luna_core.private_memory import TOOL_SCHEMA as private_schema, tool_handler as private_handler
+    ctx.register_tool(name="group_memory", toolset="memory", schema=group_schema, handler=group_handler)
+    ctx.register_tool(name="private_memory", toolset="memory", schema=private_schema, handler=private_handler)
     from luna_core.people import TOOL_SCHEMA, tool_handler
     ctx.register_tool(name="people", toolset="people", schema=TOOL_SCHEMA, handler=tool_handler)
+    from luna_core.assistant_settings import TOOL_SCHEMA as settings_schema, tool_handler as settings_handler
+    ctx.register_tool(name="luna_settings", toolset="luna_settings", schema=settings_schema, handler=settings_handler)
     ctx.register_hook("pre_llm_call", _on_pre_llm_call)
     ctx.register_hook("pre_gateway_dispatch", _on_pre_gateway_dispatch)
     ctx.register_hook("transform_llm_output", _on_transform_llm_output)

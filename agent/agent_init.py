@@ -1270,7 +1270,8 @@ def _init_memory(agent, _agent_cfg, skip_memory, platform):
     _private_memory_allowed = True
     if isinstance(_agent_cfg.get("luna"), dict):
         from luna_core.surface_policy import private_memory_allowed
-        _private_memory_allowed = private_memory_allowed(_agent_cfg, getattr(agent, "_chat_type", None), getattr(agent, "_user_id", None))
+        _private_memory_allowed = private_memory_allowed(_agent_cfg, getattr(agent, "_chat_type", None),
+            getattr(agent, "_user_id", None), platform=platform, chat_id=getattr(agent, "_chat_id", None))
     from tools.memory_tool import get_builtin_memory_config
     mem_config = get_builtin_memory_config(_agent_cfg)
     if _private_memory_allowed and (not skip_memory or _memory_toolset_requested):
@@ -1292,6 +1293,12 @@ def _init_memory(agent, _agent_cfg, skip_memory, platform):
                     user_profile_enabled=agent._user_profile_enabled,
                 )
                 agent._memory_store.load_from_disk()
+
+    if isinstance(_agent_cfg.get("luna"), dict):
+        from luna_core.surface_policy import room_surface
+        if room_surface(getattr(agent, "_chat_type", None)):
+            from luna_core.group_memory import configure_agent
+            configure_agent(agent, _agent_cfg, skip_memory)
 
     # External memory provider plugin (one at a time, alongside built-in): memory.provider.
     agent._memory_manager = None

@@ -14,6 +14,7 @@ vi.mock("@/lib/luna-onboarding", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/luna-onboarding")>(),
   onboardingApi: { telegram: mocks.telegramSave, get: mocks.report, choice: mocks.choice, personas: async () => ({ personas: [{ id: "generic", name: "Companion", description: "A fixture", content: "# Fixture persona" }] }) },
 }));
+vi.mock("@/lib/luna-api", () => ({ lunaApi: { saveCharacter: mocks.soul } }));
 vi.mock("@/lib/api", () => ({ getManagementProfile: () => "test-profile", api: { updateProfileSoul: mocks.soul, setModelAssignment: mocks.assign, getModelOptions: vi.fn(), setEnvVar: mocks.env, saveConfig: mocks.config, updateMessagingPlatform: mocks.platform, getStatus: mocks.status, startGateway: mocks.start, testMessagingPlatform: mocks.connection, getActionStatus: mocks.actionStatus } }));
 vi.mock("@/components/OpenCodeSetup", () => ({ default: () => <div>Free model setup</div> }));
 vi.mock("@/components/OAuthProvidersCard", () => ({ OAuthProvidersCard: () => <div>Browser account login</div> }));
@@ -66,10 +67,17 @@ it("offers browser subscription login and assigns the live picker selection with
   expect(mocks.report).toHaveBeenCalledTimes(2);
 });
 
-it("applies the selected persona to the active profile", async () => {
+it("requires a chosen name and saves it with the selected persona", async () => {
   await click("3. Character");
+  const save = [...host.querySelectorAll("button")].find(button => button.textContent === "Apply persona")!;
+  expect(save.disabled).toBe(true);
+  const input = [...host.querySelectorAll("label")].find(label => label.textContent?.includes("companion’s name"))!.querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Mira");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   await click("Apply persona");
-  expect(mocks.soul).toHaveBeenCalledWith("test-profile", "# Fixture persona");
+  expect(mocks.soul).toHaveBeenCalledWith({ soul_text: "# Mira" });
 });
 
 

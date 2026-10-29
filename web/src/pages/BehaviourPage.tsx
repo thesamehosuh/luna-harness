@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { ArrowDown, ArrowUp, Play, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -493,7 +494,7 @@ export function WakePolicyCard({
             </label>
           ))}
           <p className="mt-2">Allow groups in Channels first, then choose which to watch. Each topic is evaluated separately.
-            With no selection, ambient wakes watch no groups.</p>
+            With no selection, ambient wakes watch no groups. <Link to="/groups" className="text-primary underline">Manage each group’s notes and people</Link>.</p>
         </fieldset>
 
         <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -758,12 +759,13 @@ export default function BehaviourPage() {
   const writeThreshold = async (key: string, value: number | null) => {
     setSavingKey(key);
     try {
-      const res = await lunaApi.setThresholds({ [key]: value });
+      const res = await lunaApi.setThresholds({ [key]: value }, behaviour?.revision);
       const result = res.results[key];
       if (result && !result.ok) {
         showToast(result.error ?? `Could not save ${thresholdLabel(key)}`, "error");
       } else {
         setThresholds(res.state);
+        if (res.revision) setBehaviour(current => current ? { ...current, revision: res.revision } : current);
       }
     } catch (e) {
       showToast(errorMessage(e), "error");

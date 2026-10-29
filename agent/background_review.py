@@ -929,6 +929,10 @@ def _fork_init_kwargs(agent: Any, rt: Dict[str, Any], routed: bool, max_iteratio
         "enabled_toolsets": getattr(agent, "enabled_toolsets", None),
         "disabled_toolsets": getattr(agent, "disabled_toolsets", None), "skip_memory": True,
     }
+    if getattr(getattr(agent, "_memory_store", None), "is_group_memory", False):
+        # A routed review must never initialize the private owner file store.
+        for field in ("chat_type", "chat_id", "thread_id", "user_id", "user_name"):
+            kwargs[field] = getattr(agent, "_" + field, None)
     if isinstance(rt.get("max_tokens"), int):
         kwargs["max_tokens"] = rt["max_tokens"]
     if isinstance(rt.get("command"), str) and rt["command"]:
@@ -1111,6 +1115,14 @@ def _review_tool_whitelist(
             configured_extra_tools = {name.strip() for name in extra_raw if isinstance(name, str) and name.strip()}
     except Exception:
         logger.debug("background_review extra_tools parse failed", exc_info=True)
+    store = getattr(review_agent, "_memory_store", None)
+    if getattr(store, "is_group_memory", False):
+        # Maintenance of public files cannot request private reads, host tools,
+        # skills or other groups, including through configured extra tools.
+        public = {"memory"} if review_memory and store.memory_enabled else set()
+        if review_memory and store.people_enabled:
+            public.add("people")
+        return public, set()
     return whitelist | configured_extra_tools, configured_extra_tools
 
 
@@ -1151,16 +1163,20 @@ def _run_review_fork(
     prompt_extra = f" Exception — these configured tools are also allowed: {extra_list}." if configured_extra_tools else ""
     # Keep the deny/prompt wording in sync with the whitelist: a memory-less review must not
     # tell the model that memory is available, or it will burn iterations on denied calls.
-    memory_phrase_deny = " and memory for notes (add only)" if "memory" in review_whitelist else ""
+    memory_phrase_deny = " and memory for notes" if "memory" in review_whitelist else ""
     memory_phrase_prompt = "memory and skill " if "memory" in review_whitelist else "skill "
+    group_review = getattr(getattr(st.review_agent, "_memory_store", None), "is_group_memory", False)
+    if group_review:
+        memory_phrase_prompt = "the permitted group memory and people "
     set_thread_tool_whitelist(
         review_whitelist,
-        deny_msg_fmt=(
+        deny_msg_fmt=(("Background group maintenance denied {tool_name}. Only the group's memory and people "
+                       "tools are available. Do not retry {tool_name}.") if group_review else (
             "Background review denied non-whitelisted tool: "
             "{tool_name}. Allowed here: skill_view/skills_list/read_file/search_files to read, "
             "skill_manage(action='patch'|...) to change skills"
             + memory_phrase_deny + "." + deny_extra + " Do not retry {tool_name}."
-        ),
+        )),
     )
     with suppress(Exception):
         from tools.skill_manager_guards import _reset_background_review_read_marks

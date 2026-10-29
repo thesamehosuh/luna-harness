@@ -69,7 +69,7 @@ class GatewayAgentCacheMixin:
         return out
 
     # Kept for the process lifetime: loading a provider imports its plugin module, and this runs on every inbound message.
-    _MEMORY_IDENTITY_PROVIDER_MEMO: dict[str, Any] = {}
+    _MEMORY_IDENTITY_PROVIDER_MEMO: dict[tuple[str, str], Any] = {}
 
     @classmethod
     def _memory_provider_identity_signature(cls, provider_name: Any) -> dict[str, Any]:
@@ -79,13 +79,15 @@ class GatewayAgentCacheMixin:
             return {}
         name = provider_name.strip()
         try:
-            instance = cls._MEMORY_IDENTITY_PROVIDER_MEMO.get(name)
+            from hermes_constants import hermes_home_key
+            key = (hermes_home_key(), name)
+            instance = cls._MEMORY_IDENTITY_PROVIDER_MEMO.get(key)
             if instance is None:
                 from plugins.memory import load_memory_provider
                 instance = load_memory_provider(name, register_skills=False)
                 if instance is None:
                     return {}
-                cls._MEMORY_IDENTITY_PROVIDER_MEMO[name] = instance
+                cls._MEMORY_IDENTITY_PROVIDER_MEMO[key] = instance
             signature = instance.identity_signature()
             return dict(signature) if isinstance(signature, dict) else {}
         except Exception:

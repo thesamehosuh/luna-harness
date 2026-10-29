@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def register_timeout_notice(
-    runner, approval_data: dict, *, command: str, card_message_id: Optional[str]) -> None:
+    runner, approval_data: dict, *, command: str, card_message_id: Optional[str], notification_context=None) -> None:
     """Arm a settle hook that posts the timed-out notice for ``approval_data['request_id']``.
 
     ``runner`` is the ``TurnRunner`` (for ``_ctx`` and ``_schedule``); ``card_message_id`` is the
@@ -33,10 +33,11 @@ def register_timeout_notice(
     from tools.approval import register_gateway_settle
 
     request_id = approval_data.get("request_id")
-    session_key = runner._ctx.session_key or ""
+    session_key = approval_data.get("approval_session_key") or runner._ctx.session_key or ""
     if not request_id or not session_key:
         return
     timeout_s = approval_timeout_seconds()
+    context = notification_context or runner._ctx
 
     def settle(reason: str) -> None:
         if reason != "timeout":
@@ -47,17 +48,19 @@ def register_timeout_notice(
         if callable(still_current) and not still_current():
             return
         runner._schedule(
-            _post_timeout_notice(runner._ctx, command, card_message_id, timeout_s),
+            _post_timeout_notice(context, command, card_message_id, timeout_s,
+                                 private_memory=approval_data.get("owner_dm_only", False)),
             "Approval timeout notice scheduling error")
 
     register_gateway_settle(session_key, request_id, settle)
 
 
-async def _post_timeout_notice(ctx, command: str, card_message_id: Optional[str], timeout_s: int) -> None:
+async def _post_timeout_notice(ctx, command: str, card_message_id: Optional[str], timeout_s: int, *, private_memory=False) -> None:
     from gateway.run import _interim_metadata
 
     adapter = ctx._status_adapter
-    notice = format_approval_timed_out_notice(timeout_s)
+    notice = ("Private-memory approval expired. Nothing was shared." if private_memory
+              else format_approval_timed_out_notice(timeout_s))
     metadata = _interim_metadata(ctx._status_thread_metadata)
     try:
         # Plain markdown, not the card's platform markup: ``edit_message`` re-formats it itself.

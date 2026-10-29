@@ -1410,7 +1410,7 @@ function TelegramOnboardingPanel({
                       Allowed users
                     </span>
                     {detectedOwnerId && allowedIds.includes(detectedOwnerId) && (
-                      <Badge tone="success">owner detected</Badge>
+                      <Badge tone="success">owner detected · admin access included</Badge>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">

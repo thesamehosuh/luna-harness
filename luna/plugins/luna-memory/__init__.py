@@ -9,8 +9,8 @@ Status (the dashboard Help page's Memory section covers the design from the oper
   behind our budget and identity layer. Vendoring it into this plugin (so no bundled internals are
   imported live) is the next step; until then the import is guarded and degrades to no recall.
 
-Room context is **owned by luna-room** (single rendition per turn). This provider never injects
-room chatter: a second, differently-trimmed copy of the same room under the "authoritative
+Room context is **owned by luna-room** (single rendition per turn). This provider injects derived
+room memory, never a second window of chatter: a differently-trimmed copy under the "authoritative
 reference" memory fence is how a model blends two windows into a false composite — and it leaked
 group chatter into DM/CLI turns.
 
@@ -142,6 +142,8 @@ class LunaMemoryProvider(_MemoryProviderBase):
     def __init__(self) -> None:
         self._home = runtime_home()
         self._room_chat = None
+        self._room_peer = None
+        self._room_query = ""
         self._room_thread = ""
         self._session_id = ""
         self._platform = getenv("LUNA_PLATFORM", "telegram")
@@ -178,6 +180,8 @@ class LunaMemoryProvider(_MemoryProviderBase):
         restore()
         from luna_core.surface_policy import room_surface
         self._room_chat = str(kwargs.get("chat_id") or "") if room_surface(kwargs.get("chat_type")) else None
+        self._platform = normalize_platform(kwargs.get("platform") or self._platform)
+        self._room_peer = None
         from gateway.session_context import get_session_env
         from luna_core.room_dispatch import current_target
         target = current_target()
@@ -191,19 +195,26 @@ class LunaMemoryProvider(_MemoryProviderBase):
             apply_overrides(registry)
             platform = normalize_platform(kwargs.get("platform") or self._platform)
             is_new = registry.get_any(platform, str(user_id)) is None
-            registry.upsert_auto(
+            self._room_peer = registry.upsert_auto(
                 platform,
                 str(user_id),
                 display_name=kwargs.get("user_name"),
                 user_id_alt=kwargs.get("user_id_alt"),
-            )
+            ).peer_id
             if is_new:
                 # A member we had never seen: refresh honcho.json's alias map now, so the
                 # bundled provider resolves them to the registry peer instead of generating its
                 # own (differently-suffixed) id — one human must not become two Honcho peers.
                 _refresh_alias_map(registry)
         # Best-effort bridge to the bundled honcho provider for recall/dialectic.
-        self._backend = self._load_bundled_honcho() if self._room_chat is None else None
+        if self._room_chat is None:
+            self._backend = self._load_bundled_honcho()
+        else:
+            from luna_core.room_memory import RoomMemory
+            from luna_core.honcho import public_room_session
+            platform = normalize_platform(kwargs.get("platform") or self._platform)
+            room_session = public_room_session(platform, self._room_chat, self._room_thread)
+            self._backend = RoomMemory(room_session, self._room_peer, _recall_max_chars())
         if self._backend is not None and hasattr(self._backend, "initialize"):
             try:
                 self._backend.initialize(session_id, **kwargs)
@@ -220,23 +231,29 @@ class LunaMemoryProvider(_MemoryProviderBase):
         Only the bridged recall backend feeds this — room context belongs to luna-room (one
         rendition per turn, group surface only).
         """
+        if not self._honcho_enabled():
+            return ""
+        if self._room_chat is not None and self._room_query:
+            query = self._room_query
         raw = ""
-        if self._room_chat is not None:
-            from luna_core.room_dispatch import current_target
-            target = current_target()
-            excluded = target.excluded_message_ids if target is not None else ()
-            rows = self._ensure_conn().execute("SELECT message_id,content FROM messages WHERE chat_id=? AND thread_id=? ORDER BY timestamp DESC LIMIT 40", (self._room_chat, self._room_thread)).fetchall()
-            raw = "\n\n".join(str(row[1] or "") for row in rows if str(row[0]) not in excluded)
         if self._backend is not None and hasattr(self._backend, "prefetch"):
             try:
                 raw = self._bounded_prefetch(query, session_id=session_id) or ""
             except Exception:
                 log.warning("[luna-memory] bridged prefetch failed", exc_info=True)
 
-        sections = [s for s in re.split(r"\n\s*\n", raw) if s.strip()] if raw.strip() else []
-        budget = rank_sections(
-            _score_sections(sections, query), max_chars=_recall_max_chars()
-        ) if sections else None
+        if self._room_chat is not None:
+            # RoomMemory has already bounded and ordered semantic results. An
+            # English token-overlap rerank splits their headings from the facts
+            # and promotes "greeted Luna" for questions such as "LUNA WHO AM I".
+            from luna_core.budget import enforce_budget
+            budget = enforce_budget(raw, max_chars=_recall_max_chars()) if raw else None
+            sections = [raw] if raw else []
+        else:
+            sections = [s for s in re.split(r"\n\s*\n", raw) if s.strip()] if raw.strip() else []
+            budget = rank_sections(
+                _score_sections(sections, query), max_chars=_recall_max_chars()
+            ) if sections else None
         text = budget.text if budget is not None else ""
         self._last_recall = {
             "degraded": self._recall_degraded,
@@ -246,12 +263,15 @@ class LunaMemoryProvider(_MemoryProviderBase):
             "sections": len(sections),
             "backend": "room-public" if self._room_chat is not None else ("honcho" if self._backend is not None else "none"),
         }
+        if self._room_chat is not None:
+            log.info("[luna-memory] room recall sender_resolved=%s chars=%d degraded=%s",
+                     bool(self._room_peer), len(text), self._recall_degraded)
         return text
 
     def _bounded_prefetch(self, query, *, session_id=""):
         from concurrent.futures import Future, TimeoutError
         from agent.memory_provider import spawn_context_thread
-        key = (query, session_id)
+        key = (query, session_id, self._room_peer)
         pending = self._recall_pending
         if pending is not None and pending[0] != key:
             if not pending[1].done():
@@ -272,7 +292,7 @@ class LunaMemoryProvider(_MemoryProviderBase):
             timeout = max(0.01, min(10, float(_memory_config().get("recall_timeout_seconds", 2))))
             result = pending[1].result(timeout=timeout)
             self._recall_pending = None
-            self._recall_degraded = False
+            self._recall_degraded = bool(getattr(self._backend, "degraded", False))
             return result
         except TimeoutError:
             self._recall_degraded = True
@@ -285,7 +305,7 @@ class LunaMemoryProvider(_MemoryProviderBase):
     def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "",
                   turn_author: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
         """Record the turn under the author's peer (from the transport, never from text)."""
-        if self._backend is not None and hasattr(self._backend, "sync_turn"):
+        if self._honcho_enabled() and self._backend is not None and hasattr(self._backend, "sync_turn"):
             try:
                 # Only pass what the backend's signature accepts; the manager may add kwargs.
                 self._backend.sync_turn(user_content, assistant_content, session_id=session_id,
@@ -316,6 +336,8 @@ class LunaMemoryProvider(_MemoryProviderBase):
             log.debug("[luna-memory] sync_turn identity skipped", exc_info=True)
 
     def _forward(self, method, *args, **kwargs):
+        if method != "identity_signature" and not self._honcho_enabled():
+            return None
         callback = getattr(self._backend, method, None)
         if callback is not None:
             return callback(*args, **kwargs)
@@ -324,13 +346,29 @@ class LunaMemoryProvider(_MemoryProviderBase):
         self._forward("queue_prefetch", query, session_id=session_id)
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
-        return []
+        return self._forward("get_tool_schemas") or []
 
     def handle_tool_call(self, tool_name: str, args: Dict[str, Any], **kwargs: Any) -> str:
-        return ""
+        return self._forward("handle_tool_call", tool_name, args, **kwargs) or ""
 
     def identity_signature(self) -> Dict[str, Any]:
-        return {"provider": "luna-memory", "version": VERSION, "home": str(self._home), "backend": self._forward("identity_signature") or {}, "visibility": "room-public" if self._room_chat is not None else "private-dm"}
+        # The gateway probes an UNINITIALIZED provider. Its backend is None, so
+        # forwarding alone silently hid identity, connection and tuning changes.
+        from plugins.memory.honcho.client import HonchoClientConfig
+        import hashlib
+        import json
+        from dataclasses import asdict
+        from luna_core import config_read
+        cfg = asdict(HonchoClientConfig.from_global_config())
+        state = {"client": cfg, "setup": config_read.section("luna", "setup", "memory", default="enabled")}
+        fingerprint = hashlib.sha256(json.dumps(state, sort_keys=True, default=str).encode()).hexdigest()
+        return {"provider": "luna-memory", "version": VERSION, "home": str(self._home), "honcho_config": fingerprint}
+
+    def _honcho_enabled(self):
+        from luna_core import config_read
+        from plugins.memory.honcho.client import HonchoClientConfig
+        return (config_read.section("luna", "setup", "memory", default="enabled") == "enabled"
+                and HonchoClientConfig.from_global_config().enabled)
 
     def shutdown(self) -> None:
         if self._conn is not None:
@@ -346,6 +384,37 @@ class LunaMemoryProvider(_MemoryProviderBase):
 
     # -- lifecycle no-ops (the manager calls these; a duck-typed provider must define them) -----
     def on_turn_start(self, turn_number: int, message: str, **kwargs: Any) -> None:
+        if self._room_chat is not None:
+            # Cached room agents can receive a different transport author next turn.
+            # Resolve the current author before recalling that person's public facts.
+            author_id = kwargs.get("author_id")
+            from luna_core.room_dispatch import current_target
+            from gateway.session_context import get_session_env
+            target = current_target()
+            if (target is not None and target.profile_home == str(self._home.resolve())
+                    and target.platform == self._platform and target.chat_id == self._room_chat
+                    and target.thread_id == self._room_thread):
+                message_id = target.message_id
+                if not author_id:
+                    author_id = target.user_id
+            else:
+                message_id = get_session_env("HERMES_SESSION_MESSAGE_ID", "")
+            # The shared observe source clears user_id. Its inbound message ID
+            # still identifies a transport-owned index row with the real author.
+            # Also use that row's clean text for search, excluding room scaffolding.
+            row = self._ensure_conn().execute(
+                "SELECT user_id,content FROM messages WHERE chat_id=? AND thread_id=? AND message_id=?",
+                (self._room_chat, self._room_thread, str(message_id)),
+            ).fetchone() if message_id else None
+            if not author_id and row is not None:
+                author_id = row[0]
+            self._room_query = str(row[1] or "")[:4000] if row is not None else ""
+            ident = IdentityRegistry(self._ensure_conn(), prefix=self._peer_prefix).get_any(
+                self._platform, str(author_id)
+            ) if author_id else None
+            self._room_peer = ident.peer_id if ident is not None else None
+            if self._backend is not None:
+                self._backend.peer_id = self._room_peer
         self._forward("on_turn_start", turn_number, message, **kwargs)
 
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:

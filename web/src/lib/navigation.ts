@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import {
   Activity, BarChart3, BookOpen, Brain, Clock, Cpu, FileText, FolderOpen,
   KeyRound, LifeBuoy, MessageSquare, Package, Plug, Puzzle, Radio,
-  Rocket, Settings, Settings2, ShieldCheck, Sparkles, Users, Webhook, Wrench,
+  Rocket, Settings, Settings2, ShieldCheck, Sparkles, Users, Webhook, Wrench, MessagesSquare,
 } from "lucide-react";
 import type { Translations } from "@/i18n/types";
 
@@ -30,6 +30,7 @@ export const DASHBOARD_NAV: NavItem[] = [
   { path: "/character", label: "Character", icon: Sparkles, group: "companion" },
   { path: "/behaviour", label: "Behaviour", icon: Activity, group: "companion" },
   { path: "/people", label: "People", icon: Users, group: "companion" },
+  { path: "/groups", label: "Groups", icon: MessagesSquare, group: "companion", keywords: "rooms group memory members people privacy approvals" },
   { path: "/memory", label: "Memory", icon: Brain, group: "companion" },
   { path: "/sessions", labelKey: "sessions", label: "Sessions", icon: MessageSquare, group: "workspace" },
   { path: "/files", label: "Files", icon: FolderOpen, group: "workspace" },
@@ -54,7 +55,7 @@ export const DASHBOARD_NAV: NavItem[] = [
 
 // Keep everyday companion pages visible. Full management routes remain one
 // disclosure away and searchable from Control Center.
-const PRIMARY_PATHS = new Set(["/controls", "/character", "/behaviour", "/people", "/memory", "/sessions", "/help"]);
+const PRIMARY_PATHS = new Set(["/controls", "/character", "/behaviour", "/people", "/groups", "/memory", "/sessions", "/help"]);
 for (const item of DASHBOARD_NAV) item.secondary = !PRIMARY_PATHS.has(item.path);
 
 export const CHAT_NAV_ITEM: NavItem = {

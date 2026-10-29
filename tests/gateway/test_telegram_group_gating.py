@@ -208,7 +208,9 @@ def test_unmentioned_group_messages_can_be_observed_without_dispatching():
     asyncio.run(_run())
 
 
-def test_observed_group_context_uses_shared_source_and_prompt_for_later_mentions():
+def test_observed_group_context_uses_shared_source_and_prompt_for_later_mentions(monkeypatch):
+    from hermes_cli import product_runtime
+    monkeypatch.setattr(product_runtime, 'enabled', lambda: False)
     async def _run():
         adapter = _make_adapter(
             require_mention=True,
@@ -240,6 +242,26 @@ def test_observed_group_context_uses_shared_source_and_prompt_for_later_mentions
         assert "current new message" in event.channel_prompt
 
     asyncio.run(_run())
+
+
+@pytest.mark.parametrize('topic', [None, '7'])
+def test_luna_observed_live_turn_and_new_command_use_the_same_configured_session(monkeypatch, topic):
+    from dataclasses import replace
+    from hermes_cli import product_runtime
+    from gateway.session import build_session_key
+    monkeypatch.setattr(product_runtime, 'enabled', lambda: True)
+    adapter = _make_adapter(require_mention=True, allowed_chats=['-100'], group_allowed_chats=['-100'],
+                            observe_unmentioned_group_messages=True)
+    event = adapter._build_message_event(_group_message('Luna who am I', from_user_id=222), MessageType.TEXT)
+    event.source.thread_id = topic
+    live = adapter._apply_telegram_group_observe_attribution(event)
+    command = adapter._apply_telegram_group_observe_attribution(replace(event,text='/new',message_type=MessageType.COMMAND))
+    assert live.source.user_id == command.source.user_id == '222'
+    for per_user in [True, False]:
+        kwargs = dict(group_sessions_per_user=per_user, thread_sessions_per_user=per_user)
+        assert build_session_key(live.source, **kwargs) == build_session_key(command.source, **kwargs)
+    assert build_session_key(live.source, True, True) != build_session_key(
+        adapter._telegram_group_observe_shared_source(live.source), True, True)
 
 
 def test_observed_group_context_preserves_slash_command_text_for_dispatch():
@@ -716,7 +738,10 @@ def _group_voice_message(
 # ---------------------------------------------------------------------------
 
 
-def test_triggered_location_message_uses_shared_session_in_observe_mode():
+@pytest.mark.parametrize('luna', [False, True])
+def test_triggered_location_message_uses_configured_session_in_observe_mode(monkeypatch, luna):
+    from hermes_cli import product_runtime
+    monkeypatch.setattr(product_runtime, 'enabled', lambda: luna)
     async def _run():
         adapter = _make_adapter(
             require_mention=False,
@@ -734,7 +759,7 @@ def test_triggered_location_message_uses_shared_session_in_observe_mode():
 
         adapter.handle_message.assert_awaited_once()
         event = adapter.handle_message.call_args[0][0]
-        assert event.source.user_id is None
+        assert event.source.user_id == ('111' if luna else None)
         assert "[Alice Example|111]" in event.text
 
     asyncio.run(_run())

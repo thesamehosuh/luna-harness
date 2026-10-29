@@ -116,12 +116,12 @@ def test_dm_turn_gets_only_basic_people_reference(room_env):
     assert getattr(event, "_luna_room_injected", False) is False
 
 
-def test_other_admitted_group_has_basic_directory_without_copying_watched_history(room_env):
+def test_other_admitted_group_has_its_own_context_without_copying_watched_history(room_env):
     first = _event(source=_source(chat_id="other-room", user_id="u_alex", user_name="Alex"))
     gateway = FakeGateway()
     room_env._on_pre_gateway_dispatch(event=first, gateway=gateway, session_store=FakeSessionStore())
     assert "PEOPLE.md" in str(gateway.notes) and "Alex" in str(gateway.notes)
-    assert "Room context" not in str(gateway.notes) and first.channel_prompt == ""
+    assert "Room context" in str(gateway.notes) and first.channel_prompt == ""
     second = _event(source=_source(chat_id="third-room", user_id="u_bob", user_name="Bob"))
     other = FakeGateway()
     room_env._on_pre_gateway_dispatch(event=second, gateway=other, session_store=FakeSessionStore())
@@ -164,7 +164,7 @@ def test_other_chat_gets_directory_but_no_watched_room_history(room_env):
     gateway = FakeGateway()
     room_env._on_pre_gateway_dispatch(event=event, gateway=gateway, session_store=FakeSessionStore())
     assert "PEOPLE.md" in str(gateway.notes)
-    assert "Room context" not in str(gateway.notes)
+    assert "Room context" in str(gateway.notes)
 
 
 def test_drops_room_context_when_sidecar_missing(room_env):

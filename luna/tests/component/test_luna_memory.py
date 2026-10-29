@@ -86,12 +86,13 @@ def test_prefetch_excludes_room_context(provider):
     assert "secret group chatter" not in out
 
 
-def test_group_recall_is_topic_scoped_and_excludes_other_pending_requests(provider, tmp_path):
+def test_group_recall_uses_public_history_without_duplicating_raw_pending_requests(provider, tmp_path):
     from luna_core.room import record_inbound
     from luna_core.room_dispatch import CURRENT_TARGET, Target
     _, p = provider
     p.initialize("group-session", platform="telegram", user_id="1000000001", chat_id="group", chat_type="forum", thread_id="55")
-    assert p._backend is None
+    assert p._backend is not None and "group_group" in p._backend.session_id
+    p._backend.prefetch = lambda query, **kwargs: "PUBLIC_TOPIC_SUMMARY"
     conn = p._ensure_conn()
     for mid, topic, body in [("1", "55", "SAME_TOPIC_HISTORY"), ("2", "55", "OTHER_PENDING_QUESTION"), ("3", "66", "OTHER_TOPIC_HISTORY")]:
         record_inbound(conn, message_id=mid, chat_id="group", thread_id=topic, user_id="1000000001", content=body)
@@ -100,7 +101,7 @@ def test_group_recall_is_topic_scoped_and_excludes_other_pending_requests(provid
         recall = p.prefetch("history")
     finally:
         CURRENT_TARGET.reset(token)
-    assert "SAME_TOPIC_HISTORY" in recall
+    assert "PUBLIC_TOPIC_SUMMARY" in recall and "SAME_TOPIC_HISTORY" not in recall
     assert "OTHER_PENDING_QUESTION" not in recall and "OTHER_TOPIC_HISTORY" not in recall
 
 

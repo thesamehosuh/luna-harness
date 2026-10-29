@@ -867,6 +867,13 @@ class GatewaySlashCommandsMixin(
     async def _handle_memory_command(self, event: MessageEvent) -> str:
         """Handle /memory — review pending memory writes + toggle the approval gate. Entries are small
         enough to review inline, so the full flow works on every platform."""
+        from hermes_cli.config import load_config
+        config = load_config() or {}
+        if isinstance(config.get("luna"), dict):
+            from luna_core.group_memory import owner_dm
+            source = event.source
+            if not owner_dm(config, source.platform, source.chat_type, source.chat_id, source.user_id):
+                return "Review memory proposals and change approval settings in your owner DM. Manage group notes in Groups on the dashboard."
         from hermes_cli.write_approval_commands import handle_pending_subcommand
         from tools import write_approval as wa
         from tools.memory_tool import load_on_disk_store

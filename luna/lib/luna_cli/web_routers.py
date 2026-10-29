@@ -55,6 +55,12 @@ router = APIRouter(prefix="/api/luna", tags=["luna"], dependencies=[Depends(_req
 from luna_cli.profile_transfer_router import router as profile_transfer_router
 
 router.include_router(profile_transfer_router)
+from luna_cli.groups_router import router as groups_router
+
+router.include_router(groups_router)
+from luna_cli.note_files_router import router as note_files_router
+
+router.include_router(note_files_router)
 
 
 # ── Costly-operation rate limiting ────────────────────────────────────────────────────────────────
@@ -97,6 +103,7 @@ def _rate_limit(name: str) -> None:
 
 class ThresholdUpdate(BaseModel):
     values: Dict[str, Any] = Field(default_factory=dict)
+    revision: Optional[str] = None
 
 
 class IdentityUpsert(BaseModel):
@@ -255,7 +262,13 @@ async def get_thresholds():
 
 @router.put("/thresholds")
 async def put_thresholds(body: ThresholdUpdate):
-    result = api_models.set_thresholds(body.values)
+    from luna_core import settings
+    try:
+        with settings.transaction(body.revision):
+            result = api_models.set_thresholds(body.values)
+            result["revision"] = settings.revision()
+    except settings.Conflict as exc:
+        raise HTTPException(409, str(exc)) from None
     failed = {k: v for k, v in result["results"].items() if not v["ok"]}
     if failed:
         raise HTTPException(status_code=400, detail=failed)
@@ -351,15 +364,17 @@ async def _put_character(body: CharacterUpdate):
         preset = next((p for p in character_models.personas() if p["id"] == body.preset_id), None)
         if preset is None:
             raise HTTPException(status_code=404, detail=f"unknown persona preset {body.preset_id!r}")
-        out["soul"] = character_models.write_soul_text(preset["content"])
-    elif body.sections is not None or body.soul_text is not None:
+        from luna_core.cascade import character_identity
+        name = body.title if body.title is not None else character_identity()[0]
+        out["soul"] = character_models.write_soul_text(character_models.named_soul(preset["content"], name))
+    elif any(value is not None for value in (body.sections, body.soul_text, body.title, body.intro, body.footer)):
         try:
             if body.soul_text is not None:
                 out["soul"] = character_models.write_soul_text(body.soul_text)
             else:
                 out["soul"] = character_models.write_soul(
                     title=body.title, intro=body.intro,
-                    sections=[s.model_dump() for s in body.sections or []],
+                    sections=[s.model_dump() for s in body.sections] if body.sections is not None else None,
                     footer=body.footer,
                 )
         except Exception as exc:

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { GitMerge, RefreshCw, Save } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { GitMerge, RefreshCw, Save, Search } from "lucide-react";
+import { Link, useSearchParams } from "react-router";
+import { groupsApi, type PeopleScopes } from "@/lib/groups-api";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
@@ -8,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { useToast } from "@nous-research/ui/hooks/use-toast";
 import { Toast } from "@nous-research/ui/ui/components/toast";
 import { usePageHeader } from "@/contexts/usePageHeader";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { errorMessage } from "@/lib/api-error";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { BlossomBranch } from "@/components/BlossomBranch";
@@ -24,6 +27,8 @@ interface EditState {
   pronouns: string;
   role: string;
   aliases: string;
+  group_id?: string;
+  revision?: string;
 }
 
 function toEdit(row: IdentityRow): EditState {
@@ -92,12 +97,21 @@ function AuditPanel({ audit }: { audit: AuditResponse }) {
 }
 
 export default function PeoplePage() {
+  const [params, setParams] = useSearchParams();
+  const selectedGroup = params.get("group") || "";
+  const [scopes, setScopes] = useState<PeopleScopes | null>(null);
+  const [query, setQuery] = useState("");
   const [identities, setIdentities] = useState<IdentityRow[]>([]);
   const [audit, setAudit] = useState<AuditResponse | null>(null);
   const [directory, setDirectory] = useState<{ text: string; count: number } | null>(null);
   const [directoryError, setDirectoryError] = useState("");
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<EditState | null>(null);
+  const editHeading = useRef<HTMLDivElement>(null);
+  const editingOpen = editing !== null;
+  useEffect(() => {
+    if (editingOpen) editHeading.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus();
+  }, [editingOpen]);
   const [merge, setMerge] = useState({ primary: "", alt: "" });
   // B3: merging rewrites the identity registry — the alt row is absorbed and deleted. The UI said
   // "Fold a second runtime id into the primary", which reads like bookkeeping and does not say that.
@@ -109,10 +123,11 @@ export default function PeoplePage() {
   const load = useCallback(async () => {
     try {
       setDirectoryError("");
-      const [list, report, local] = await Promise.all([lunaApi.getIdentity(), lunaApi.getAudit(), lunaApi.getPeopleDirectory().catch(e => { setDirectoryError(errorMessage(e)); return null; })]);
+      const [list, report, local, scoped] = await Promise.all([lunaApi.getIdentity(), lunaApi.getAudit(), lunaApi.getPeopleDirectory().catch(e => { setDirectoryError(errorMessage(e)); return null; }), groupsApi.people()]);
       setIdentities(list.identities);
       setAudit(report);
       setDirectory(local);
+      setScopes(scoped);
     } catch (e) {
       showToast(`Could not load people: ${errorMessage(e)}`, "error");
     } finally {
@@ -126,22 +141,28 @@ export default function PeoplePage() {
 
   useEffect(() => {
     setEnd(
-      <Button outlined size="sm" onClick={load}>
+      <Button outlined size="sm" onClick={load} disabled={!!editing || busy !== null}>
         <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh
       </Button>,
     );
     return () => setEnd(null);
-  }, [load, setEnd]);
+  }, [load, setEnd, editing, busy]);
 
   const saveIdentity = async () => {
-    if (!editing) return;
+    if (!editing) return false;
     if (!editing.user_id.trim()) {
       showToast("A runtime user id is required", "error");
-      return;
+      return false;
     }
     setBusy(`save:${editing.platform}:${editing.user_id}`);
     try {
-      await lunaApi.upsertIdentity({
+      const values = {
+        display_name: editing.display_name.trim(), pronouns: editing.pronouns.trim(), role: editing.role.trim(),
+        aliases: editing.aliases.split(",").map(alias => alias.trim()).filter(Boolean),
+      };
+      if (editing.group_id) {
+        await groupsApi.savePerson(editing.group_id, editing.user_id, values, editing.revision || "");
+      } else await lunaApi.upsertIdentity({
         platform: editing.platform,
         user_id: editing.user_id.trim(),
         display_name: editing.display_name.trim() || null,
@@ -152,15 +173,19 @@ export default function PeoplePage() {
           .map((a) => a.trim())
           .filter(Boolean),
       });
-      showToast("Identity saved", "success");
+      showToast(editing.group_id ? "Group entry saved" : "Shared basic details saved", "success");
       setEditing(null);
       await load();
+      return true;
     } catch (e) {
       showToast(errorMessage(e), "error");
+      return false;
     } finally {
       setBusy(null);
     }
   };
+  useUnsavedChanges({ id: "person-entry", label: "person details", dirty: !!editing,
+    onSave: saveIdentity, onDiscard: () => setEditing(null) });
 
   const runMerge = async () => {
     if (!merge.primary.trim() || !merge.alt.trim()) {
@@ -199,6 +224,20 @@ export default function PeoplePage() {
     }
   };
 
+  const group = scopes?.groups.find(item => item.id === selectedGroup);
+  const personScope = (row: IdentityRow) => scopes?.people.find(person => person.platform === row.platform && person.user_id === row.user_id);
+  const facts = (row: IdentityRow) => {
+    const person = personScope(row);
+    return selectedGroup ? person?.groups.find(item => item.id === selectedGroup)?.entry : person?.shared;
+  };
+  const visible = identities.filter(row => (!selectedGroup || !!facts(row)) &&
+    `${(facts(row)?.display_name ?? row.display_name ?? "")} ${(facts(row)?.aliases || row.aliases || []).join(" ")} ${(facts(row)?.role ?? row.role ?? "")} ${row.user_id}`.toLowerCase().includes(query.toLowerCase()));
+  const editPerson = (row: IdentityRow) => {
+    const entry = facts(row);
+    setEditing({ ...toEdit(row), ...(entry ? { display_name: entry.display_name, pronouns: entry.pronouns, role: entry.role, aliases: entry.aliases.join(", ") } : {}),
+      group_id: selectedGroup || undefined, revision: entry?.revision });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 p-6">
@@ -212,57 +251,53 @@ export default function PeoplePage() {
       <header className="relative overflow-hidden rounded-3xl border border-border/70 bg-card px-6 py-8 md:px-8 md:py-10">
         <BlossomBranch className="pointer-events-none absolute right-0 top-0 hidden w-80 opacity-40 lg:block" />
         <div className="relative max-w-3xl">
-          <H2 className="max-w-xl text-3xl font-normal lg:text-4xl">Remember who makes up the room.</H2>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">Give your companion reliable context for the people they chat with. Names and details stay tied to verified platform IDs.</p>
+          <H2 className="max-w-xl text-3xl font-normal lg:text-4xl">One person. A place in every room.</H2>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">Keep shared basic details in one directory. Choose a group to see the names, aliases and roles your companion uses there.</p>
         </div>
       </header>
-
-      {audit && <AuditPanel audit={audit} />}
 
       <Card className="rounded-2xl border-border shadow-sm">
         <CardContent className="p-5 md:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="min-w-0 flex-1"><H2 className="text-lg">Identity registry</H2><p className="mt-1 text-sm text-muted-foreground">Names, pronouns, roles, and aliases are linked to transport IDs.</p></div>
+            <div className="min-w-0 flex-1"><H2 className="text-lg">{group ? `People in ${group.name}` : "Shared basic details"}</H2><p className="mt-1 text-sm text-muted-foreground">{group ? "Group entries apply in this room. Shared basics remain available elsewhere." : "Names, pronouns and aliases stay tied to verified platform IDs across rooms."}</p></div>
             <div className="flex flex-wrap gap-2 sm:shrink-0">
-              <Button outlined size="sm" onClick={runSync} disabled={busy === "sync"}>
-                {busy === "sync" ? <Spinner className="mr-1 h-3.5 w-3.5" /> : null}
-                Sync to Honcho
-              </Button>
-              <Button size="sm" onClick={() => setEditing(emptyEdit())}>
+              <Link to="/memory?file=people" className="inline-flex items-center rounded-control border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50">Edit PEOPLE.md</Link>
+              {group && <Link to={`/groups?group=${group.id}`} className="self-center text-sm text-primary underline">Open group memory</Link>}
+              {!selectedGroup && <Button size="sm" onClick={() => setEditing(emptyEdit())} disabled={!!editing || busy !== null}>
                 Add person
-              </Button>
+              </Button>}
             </div>
           </div>
-          {!identities.length ? (
+          <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)]">
+            <label className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><input className="w-full rounded-control border border-input bg-background py-2 pl-9 pr-3 text-sm" placeholder="Find a name, alias or role" aria-label="Find a person" value={query} onChange={event => setQuery(event.target.value)} /></label>
+            <select className="rounded-control border border-input bg-background px-3 py-2 text-sm" aria-label="People directory scope" value={selectedGroup} disabled={!!editing} onChange={event => setParams(event.target.value ? { group: event.target.value } : {})}>
+              <option value="">Shared basics · all people</option>{scopes?.groups.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </div>
+          {!visible.length ? (
             <p className="mt-5 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              No people have been added yet. Members appear here as room messages are indexed.
+              {identities.length ? "No people match this group or search." : "Members appear here as your companion observes their messages."}
             </p>
           ) : (
-            <div className="mt-5 overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[900px] text-sm">
+            <div className="mt-5 overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2">Platform</th>
-                  <th className="pr-2">Runtime ID</th>
-                  <th className="pr-2">Peer</th>
-                  <th className="pr-2">Name</th>
-                  <th className="pr-2">Pronouns</th>
-                  <th className="pr-2">Role</th>
-                  <th className="pr-2">Aliases</th>
+                <tr className="bg-muted/50 text-left text-xs font-medium text-muted-foreground">
+                  <th className="px-3 py-3">Person</th>
+                  <th className="pr-3">Pronouns and role</th>
+                  <th className="pr-3">Groups</th>
+                  <th className="pr-3">Saved as</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {identities.map((row) => (
+                {visible.map((row) => (
                   <tr key={`${row.platform}:${row.user_id}`} className="border-t border-border/70 hover:bg-muted/30">
-                    <td className="px-3 py-2 pr-2">{row.platform}</td>
-                    <td className="pr-2 font-mono text-xs">{row.user_id}</td>
-                    <td className="pr-2 font-mono text-xs">{row.peer_id}</td>
-                    <td className="pr-2">{row.display_name ?? "—"}</td>
-                    <td className="pr-2">{row.pronouns ?? "—"}</td>
-                    <td className="pr-2">{row.role ?? "—"}</td>
-                    <td className="pr-2">{(row.aliases ?? []).join(", ") || "—"}</td>
+                    <td className="px-3 py-3"><p className="font-medium">{(facts(row)?.display_name ?? row.display_name) || "Unnamed person"}</p><p className="mt-1 text-xs text-muted-foreground">{(facts(row)?.aliases || row.aliases || []).join(", ") || `${row.platform} / ${row.user_id}`}</p></td>
+                    <td className="pr-3"><p>{(facts(row)?.pronouns ?? row.pronouns) || "—"}</p><p className="mt-1 text-xs text-muted-foreground">{(facts(row)?.role ?? row.role ?? "")}</p></td>
+                    <td className="max-w-56 pr-3"><div className="flex flex-wrap gap-x-3 gap-y-1">{personScope(row)?.groups.map(room => <Link key={room.id} to={`/groups?group=${room.id}`} className="text-xs text-primary underline">{room.name}</Link>)}{!personScope(row)?.groups.length && <span className="text-xs text-muted-foreground">No observed group yet</span>}</div></td>
+                    <td className="pr-3"><Badge tone={facts(row)?.overridden ? "default" : "outline"}>{facts(row)?.overridden ? "Group entry" : "Shared basics"}</Badge></td>
                     <td>
-                      <Button ghost size="sm" onClick={() => setEditing(toEdit(row))}>
+                      <Button ghost size="sm" onClick={() => editPerson(row)} disabled={!!editing || busy !== null}>
                         Edit
                       </Button>
                     </td>
@@ -275,20 +310,23 @@ export default function PeoplePage() {
       </Card>
 
       {directoryError && <p role="alert" className="text-sm text-destructive">Could not read PEOPLE.md: {directoryError}. Saved identities are still available.</p>}
-      {directory && <Card>
+      {directory && <details className="rounded-panel border border-border bg-card p-5"><summary className="cursor-pointer text-sm font-medium">Local directory and identity tools</summary><div className="mt-4 space-y-4">
+        {audit && <AuditPanel audit={audit} />}
+        <Button outlined size="sm" onClick={runSync} disabled={busy === "sync"}>Sync basic identity cards to Honcho</Button>
         <CardContent className="space-y-3 p-5">
-          <H2 className="text-base">PEOPLE.md · basic directory</H2>
+          <H2 className="text-base">PEOPLE.md</H2>
           <p className="text-sm text-muted-foreground">{directory.count} people saved locally. Your companion can add or update basic entries with the people tool, even when Honcho is unavailable. This stores names, aliases, pronouns and short roles, with no detailed memories. One transport ID follows a person across groups; model updates stay in the group or DM where they were learned.</p>
+          <Link to="/memory?file=people" className="inline-block text-sm text-primary underline">Open PEOPLE.md editor</Link>
           <details className="text-sm"><summary>View local directory</summary><pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-background/70 p-3 font-mono text-xs">{directory.text}</pre></details>
           <p className="text-xs text-muted-foreground">Edit person above updates shared basic details. Model updates remain local to their group or DM. PEOPLE.md stays out of shareable profile exports; private data backups include it.</p>
         </CardContent>
-      </Card>}
+      </div></details>}
 
-      {editing && (
+      {editing && (<div ref={editHeading}>
         <Card className="rounded-2xl border-border shadow-sm">
           <CardContent className="p-5 md:p-6">
             <H2 className="text-base">
-              {identities.some((i) => i.user_id === editing.user_id) ? "Edit person" : "Add person"}
+              {editing.group_id ? "Edit this group's entry" : identities.some((i) => i.user_id === editing.user_id) ? "Edit shared basic details" : "Add person"}
             </H2>
             <div className="grid max-w-2xl grid-cols-1 gap-4 pt-4 text-sm sm:grid-cols-2">
               <label className="flex flex-col gap-1">
@@ -296,6 +334,7 @@ export default function PeoplePage() {
                 <input
                   className="rounded-xl border border-border bg-background/70 px-3 py-2"
                   value={editing.platform}
+                  disabled={identities.some(row => row.platform === editing.platform && row.user_id === editing.user_id)}
                   onChange={(e) => setEditing({ ...editing, platform: e.target.value })}
                 />
               </label>
@@ -304,6 +343,7 @@ export default function PeoplePage() {
                 <input
                   className="rounded-xl border border-border bg-background/70 px-3 py-2 font-mono"
                   value={editing.user_id}
+                  disabled={identities.some(row => row.platform === editing.platform && row.user_id === editing.user_id)}
                   onChange={(e) => setEditing({ ...editing, user_id: e.target.value })}
                 />
               </label>
@@ -342,7 +382,7 @@ export default function PeoplePage() {
             </div>
             <div className="flex gap-2 pt-3">
               <Button size="sm" onClick={saveIdentity} disabled={busy !== null}>
-                <Save className="mr-1 h-3.5 w-3.5" /> Save
+                <Save className="mr-1 h-3.5 w-3.5" /> {editing.group_id ? "Save group entry" : "Save shared basics"}
               </Button>
               <Button outlined size="sm" onClick={() => setEditing(null)}>
                 Cancel
@@ -350,9 +390,9 @@ export default function PeoplePage() {
             </div>
           </CardContent>
         </Card>
-      )}
+      </div>)}
 
-      <Card className="rounded-2xl border-border shadow-sm">
+      <details className="rounded-panel border border-border bg-card"><summary className="cursor-pointer px-5 py-4 text-sm font-medium">Link two accounts belonging to one person</summary>
         <CardContent className="p-5 md:p-6">
           <H2 className="text-lg">Merge accounts</H2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -387,7 +427,7 @@ export default function PeoplePage() {
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </details>
 
       {/* The consequences are the point of this dialog. "Merge" reads like it adds a link; it
           actually rewrites `luna_identity` — the alt row is absorbed into the primary and DELETED,
@@ -398,7 +438,7 @@ export default function PeoplePage() {
         onCancel={() => setConfirmMerge(null)}
         onConfirm={() => void runMerge()}
         title={`Merge ${confirmMerge?.primary ?? ""} and ${confirmMerge?.alt ?? ""}?`}
-        description={`These two runtime ids become ONE identity. Your companion will treat every message from ${confirmMerge?.alt ?? "the alt id"} as coming from ${confirmMerge?.primary ?? "the primary id"}, and the ${confirmMerge?.alt ?? "alt"}'s separate identity row is deleted — its history follows the peer. There is no un-merge in the dashboard, so check the ids: a wrong merge is only reversible by editing luna-state.db by hand.`}
+        description={`These two platform IDs become one identity. Messages from ${confirmMerge?.alt ?? "the second account"} will be attributed to ${confirmMerge?.primary ?? "the primary account"}, and their history follows that identity. Check both IDs carefully; undoing a merge requires restoring a private data backup.`}
         confirmLabel="Merge identities"
         loading={busy === "merge"}
       />

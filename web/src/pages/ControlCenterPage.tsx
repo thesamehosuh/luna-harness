@@ -88,7 +88,7 @@ export default function ControlCenterPage() {
           <details className="control-section"><summary className="cursor-pointer text-sm font-medium">Use a free model with OpenCode</summary><div className="pt-5"><OpenCodeSetup onSaved={refresh} /></div></details>
         </div>
         <aside className="space-y-5">
-          <div className="control-note"><Brain className="mb-3 size-5 text-primary" /><h2 className="font-medium">Memory reasoning</h2><p className="mt-2 text-sm leading-7 text-muted-foreground">Use your companion’s model or choose a separate one, with its own reasoning effort.</p><Link to="/memory" className="mt-4 inline-flex items-center gap-2 text-sm text-primary">Manage memory <ArrowUpRight className="size-4" /></Link></div>
+          <div className="control-note"><Brain className="mb-3 size-5 text-primary" /><h2 className="font-medium">Memory and knowledge</h2><p className="mt-2 text-sm leading-7 text-muted-foreground">Control saved-file maintenance, private-read approvals and Honcho recall. Choose the model that maintains conversation knowledge.</p><Link to="/memory" className="mt-4 inline-flex items-center gap-2 text-sm text-primary">Manage memory <ArrowUpRight className="size-4" /></Link></div>
           <QuickLink to="#keys" title="Add an API key" detail="Connect a model provider or a tool." icon={KeyRound} />
           <QuickLink to="/models" title="Advanced models" detail="Fallbacks, specialist models and usage." icon={Settings2} />
         </aside>
