@@ -157,7 +157,7 @@ export default function App() {
       <div className="launcher-content">
         <div className="launcher-main-content">
           <h1 className="launcher-heading">{heading}</h1>
-          <p className="launcher-description">{repair ? 'Reinstall Luna’s files while keeping your character, connections and memories. Stop your companion in System first.' : status?.update_available ? 'Update the runtime, then carry on where you left off. Your personal data stays here.' : status?.installed ? 'Your dashboard is right here. Settle in.' : 'Luna sets everything up here. Then you’ll choose a model and bring your companion to life.'}</p>
+          <p className="launcher-description">{repair ? 'Reinstall Luna’s files while keeping your character, connections and memories. Stop your companion in System first.' : status?.update_available ? 'Stop your companion in System before updating. Your personal data stays here.' : status?.installed ? 'Your dashboard is right here. Settle in.' : 'Luna sets everything up here. Then you’ll choose a model and bring your companion to life.'}</p>
 
           {busy && <section aria-label="Setup progress" className="launcher-progress">
             <div className="flex items-start justify-between gap-4"><p className="text-sm font-medium" role="status">{cancelling ? 'Stopping safely…' : progress?.detail || 'Preparing Luna…'}</p><span className="shrink-0 text-xs tabular-nums text-muted-foreground">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span></div>

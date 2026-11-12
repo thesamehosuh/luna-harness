@@ -5206,11 +5206,17 @@ async def _start_gateway_start_control_socket(runner):
             except concurrent.futures.TimeoutError:
                 return {"multiplex": True, "pending": True, "served_profiles": runner.served_profile_names()}
 
+        from hermes_cli.product_runtime import enabled as _luna_product
+        _room_verbs = {}
+        if _luna_product():
+            from luna_core.room_sessions import room_control_verbs
+            _room_verbs = room_control_verbs(runner)
         _control_server = GatewayControlServer(
             verb_handlers={"pause-for-update": _pause_for_update_handler,
                            "rescan-profiles": _rescan_profiles_handler,
                            "migrate-profile-identity": migrate_profile_identity_verb(runner),
-                           "purge-profile-identity": purge_profile_identity_verb(runner)})
+                           "purge-profile-identity": purge_profile_identity_verb(runner),
+                           **_room_verbs})
         if not await _control_server.start():
             _control_server = None
         else:

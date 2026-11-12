@@ -41,12 +41,13 @@ def compose_command(stack, *args):
 
 def require_stopped():
     from gateway.status import is_gateway_running
-    from hermes_constants import set_hermes_home_override, reset_hermes_home_override
+    from hermes_constants import get_process_hermes_home, set_hermes_home_override, reset_hermes_home_override
     roots = [home(), *[path for path in (home() / "profiles").glob("*") if path.is_dir()]]
     for root in roots:
         token = set_hermes_home_override(root)
         try:
-            if is_gateway_running(cleanup_stale=False):
+            pid_path = None if root.resolve() == get_process_hermes_home().resolve() else root / "gateway.pid"
+            if is_gateway_running(pid_path=pid_path, cleanup_stale=False):
                 raise ValueError("Stop the affected profile gateways in System before restoring data")
         finally:
             reset_hermes_home_override(token)

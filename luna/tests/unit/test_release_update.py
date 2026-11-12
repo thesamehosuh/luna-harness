@@ -114,9 +114,18 @@ def test_checksum_mismatch_prevents_installer_and_preserves_pointer(home, monkey
     assert (home / "current-release.json").read_bytes() == before
 
 
-def test_running_gateway_prevents_download(home, monkeypatch):
+def test_legacy_install_still_requires_stopped_gateway(home, monkeypatch):
+    (home / "current-release.json").unlink()
+    (home / "current").symlink_to(home / "old")
     monkeypatch.setattr(update, "require_stopped", lambda root: (_ for _ in ()).throw(ValueError("Stop the companion")))
     monkeypatch.setattr(update, "download", lambda *a: pytest.fail("Spent bandwidth before gateway admission"))
+    with pytest.raises(ValueError, match="Stop"):
+        update.install(descriptor(), home)
+
+
+def test_managed_install_refuses_running_gateway_before_download(home, monkeypatch):
+    monkeypatch.setattr(update, "require_stopped", lambda root: (_ for _ in ()).throw(ValueError("Stop the companion")))
+    monkeypatch.setattr(update, "download", lambda *a: pytest.fail("Downloaded with running gateway"))
     with pytest.raises(ValueError, match="Stop"):
         update.install(descriptor(), home)
 
@@ -131,6 +140,7 @@ def test_successful_install_uses_desktop_installer_and_preserves_data(home, monk
         assert Path(command[1]).name == "desktop_install.py"
         assert command[2:] == ["--home", str(home), "--uv", "/fixture/uv"]
         assert kwargs["env"]["HERMES_HOME"] == str(home)
+        assert kwargs["timeout"] == 1800
         (home / "current-release.json").write_text(json.dumps({"version": "0.1.0-alpha.10", "previous": {"version": "0.1.0-alpha.8"}}))
     monkeypatch.setattr(update.subprocess, "run", installer)
     assert update.install(descriptor(), home) == "0.1.0-alpha.10"

@@ -17,6 +17,7 @@ def route(tmp_path, monkeypatch):
     marker = tmp_path / "code/luna/config/config.yaml.luna"
     marker.parent.mkdir(parents=True)
     marker.write_text("luna: {}")
+    (tmp_path / "current-release.json").write_text('{}')
     monkeypatch.setattr(web_server, "PROJECT_ROOT", tmp_path / "code")
     monkeypatch.setattr(web_server_files, "_dashboard_local_update_managed_externally", lambda: False)
     monkeypatch.setattr(web_server_gateway, "_ACTION_PROCS", {})
@@ -54,7 +55,7 @@ def test_update_spawns_the_product_module_once(route, monkeypatch):
     assert calls == [(["apply"], "hermes-update", {"module": "luna_cli.release_update"})]
 
 
-def test_live_companion_gets_actionable_refusal_without_spawning(route, monkeypatch):
+def test_live_companion_is_refused_before_spawning(route, monkeypatch):
     client, update, gateway = route
     monkeypatch.setattr(update, "require_stopped", lambda root: (_ for _ in ()).throw(ValueError("Stop your companion in Control Center")))
     monkeypatch.setattr(gateway, "_spawn_hermes_action", lambda *a, **k: pytest.fail("Spawned with active companion"))

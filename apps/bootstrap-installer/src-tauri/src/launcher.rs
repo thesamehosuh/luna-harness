@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{fs, io::{Read, Write}, path::{Path, PathBuf}, process::Stdio,
     sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 use tauri::{Emitter, Manager};
-use tokio::{io::BufReader, process::{Child, Command}, sync::Mutex};
+use tokio::{io::{AsyncReadExt, BufReader}, process::{Child, Command}, sync::Mutex};
 #[path = "desktop_controls.rs"]
 mod controls;
 #[cfg(target_os = "linux")]
@@ -78,6 +78,8 @@ fn setup_stage_detail(stage: &str) -> &'static str {
         "dependencies" => "Installing Python and Luna’s dependencies…",
         "chat-runtime" => "Preparing your chat runtime…",
         "native-tools" => "Setting up native tools…",
+        "stopping-companions" => "Pausing your companion for the update…",
+        "starting-companions" => "Starting your companion again…",
         "personal-home" => "Preparing your profile…",
         "ready" => "Installation verified. Finishing up…",
         _ => "Preparing Luna…",
@@ -225,32 +227,69 @@ async fn stop(child: &mut Child) {
         let _ = child.kill().await;
     }
 }
+// Automatic gateway recovery is disabled, so cancellation stops the process tree.
+async fn finish_setup_after_cancel<R: tokio::io::AsyncRead + Unpin>(child: &mut Child, _stdout: R) -> Result<std::process::ExitStatus> {
+    stop(child).await;
+    Ok(child.wait().await?)
+}
 async fn run_stage(app: &tauri::AppHandle, state: &State, cmd: &mut Command) -> Result<()> {
     let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
     let mut stdout = BufReader::new(child.stdout.take().unwrap());
     let mut buffer = Vec::new();
     let mut stdout_open = true;
-    // Drain stderr without forwarding package URLs or potential credential-bearing diagnostics.
+    // Retain only a bounded tail for matching known, safe failure messages. Never show raw stderr.
     let err = child.stderr.take().unwrap();
-    let drain = tokio::spawn(async move { let _ = tokio::io::copy(&mut BufReader::new(err), &mut tokio::io::sink()).await; });
+    let mut drain = tokio::spawn(async move {
+        let mut reader = BufReader::new(err);
+        let mut tail = Vec::new();
+        let mut chunk = [0u8; 4096];
+        while let Ok(n) = reader.read(&mut chunk).await {
+            if n == 0 { break }
+            tail.extend_from_slice(&chunk[..n]);
+            if tail.len() > 16384 { tail.drain(..tail.len() - 16384); }
+        }
+        tail
+    });
     let deadline = Instant::now() + Duration::from_secs(1200);
     loop {
         if state.cancelled.load(Ordering::Relaxed) || Instant::now() > deadline {
-            stop(&mut child).await; drain.abort(); check_cancel(state)?; bail!("Runtime setup timed out. Retry to resume.")
+            let _ = finish_setup_after_cancel(&mut child, stdout).await;
+            drain.abort();
+            check_cancel(state)?;
+            bail!("Runtime setup timed out. Retry to resume.")
         }
         if let Some(status) = child.try_wait()? {
-            drain.abort();
-            if !status.success() { bail!("Runtime setup failed. Retry keeps your existing installation and personal data.") }
+            let diagnostics = match tokio::time::timeout(Duration::from_secs(2), &mut drain).await {
+                Ok(Ok(tail)) => tail,
+                _ => { drain.abort(); Vec::new() },
+            };
+            if !status.success() { bail!("{}", setup_failure(&String::from_utf8_lossy(&diagnostics))) }
             return Ok(())
         }
         tokio::select! {
             line = crate::powershell::read_decoded_line(&mut stdout, &mut buffer), if stdout_open => match line {
                 Ok(Some(line)) => if let Some(stage) = line.strip_prefix("LUNA_STAGE ") { progress(app, stage, setup_stage_detail(stage)); },
                 Ok(None) => stdout_open = false,
-                Err(e) => { stop(&mut child).await; drain.abort(); return Err(e.into()) },
+                Err(e) => { let _ = finish_setup_after_cancel(&mut child, stdout).await; drain.abort(); return Err(e.into()) },
             },
             _ = tokio::time::sleep(Duration::from_millis(100)) => {},
         }
+    }
+}
+
+fn setup_failure(stderr: &str) -> &'static str {
+    if stderr.contains("Luna could not restart every companion") {
+        "Luna could not restart every companion. Open the current version and check Control Center."
+    } else if stderr.contains("An installed companion service may reference the old runtime") {
+        "Update blocked: an installed companion service may use the old runtime. Its configuration needs verification."
+    } else if stderr.contains("A native worker is still running") {
+        "An active chat is still finishing. Wait for it to finish, then try again."
+    } else if stderr.contains("Stop the affected profile gateways") {
+        "A companion is still running. Open the current version, stop it in Control Center, then try again."
+    } else if stderr.contains("The companion did not finish starting or stopping") {
+        "The companion did not finish starting or stopping. Open the current version and check Control Center."
+    } else {
+        "Runtime setup failed. Retry keeps your existing installation and personal data."
     }
 }
 
@@ -566,6 +605,17 @@ mod tests {
     impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 
     #[tokio::test]
+    #[cfg(unix)]
+    async fn cancelled_setup_stops_installer_without_waiting_for_completion() {
+        let temp = Scratch::new();
+        let marker = temp.0.join("recovered");
+        let mut child = Command::new("sh").process_group(0).arg("-c").arg("sleep 10; printf restored > \"$1\"").arg("sh").arg(&marker)
+            .stdout(Stdio::piped()).spawn().unwrap();
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        tokio::time::timeout(Duration::from_secs(3), finish_setup_after_cancel(&mut child, stdout)).await.unwrap().unwrap();
+        assert!(!marker.exists());
+    }
+    #[tokio::test]
     async fn cancellation_interrupts_a_stalled_network_operation() {
         let cancelled = Arc::new(AtomicBool::new(false));
         let trigger = cancelled.clone();
@@ -623,6 +673,14 @@ mod tests {
         for url in ["http://127.0.0.1:9119/onboarding", "https://example.com", "https://tauri.localhost.example.com", "file:///tmp/index.html"] {
             assert!(!bootstrap_origin(&reqwest::Url::parse(url).unwrap()));
         }
+    }
+    #[test]
+    fn setup_errors_only_expose_known_safe_guidance() {
+        assert!(setup_failure("An installed companion service may reference the old runtime").contains("service"));
+        assert!(setup_failure("ValueError: A native worker is still running").contains("active chat"));
+        assert!(setup_failure("Stop the affected profile gateways").contains("Control Center"));
+        assert!(setup_failure("Luna could not restart every companion").contains("could not restart"));
+        assert!(!setup_failure("secret password from a package URL").contains("secret"));
     }
     #[test]
     #[ignore = "requires the actual prebuilt release artifact via LUNA_TEST_ARCHIVE"]

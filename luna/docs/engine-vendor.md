@@ -41,7 +41,8 @@ Release-install audit additions:
   engine's upstream ZIP/git update for a Luna tree. Upgrades use Luna release bundles and preserve
   runtime state; a future automatic update channel must target this product explicitly.
 - `hermes_cli/web_routers/actions.py`: update availability reports the same Luna bundle guidance,
-  without querying or offering the engine's upstream update channel.
+  without querying or offering the engine's upstream update channel. Portable updates delegate
+  installation to Luna's release installer and require companions to be stopped first.
 - `skills/productivity/powerpoint/SKILL.md`: distinguish developer-only pytest checks from
   document verification, since nested test trees do not ship in the slim runtime.
 
@@ -593,6 +594,12 @@ directory lookup remains in `people.py`.
   changing voice presets preserves it.
 
 Validation is run after implementation and before installing, per the operator's updated request.
+
+### Local shared-room maintenance and runtime publication
+
+`gateway/run.py` registers owner-local room listing and reset control verbs in Luna mode. The overlay reuses the actual session reset lifecycle and verifies old/new database rows. `gateway/run_inbound.py` gates ordinary ingress and ambient injections while the exact shared route is being reset. Personal slash-command routing is unchanged.
+
+`gateway/status.py` briefly acquires the installation publication lock before claiming the lifetime runtime lock, rejecting stale selected-runtime starts. The installer also holds existing profile runtime locks around snapshot/publication to fence legacy runtime claims. This does not provide an offline database maintenance protocol: runner initialization can occur before its runtime claim.
 
 ### Follow-up from a real group recall failure
 

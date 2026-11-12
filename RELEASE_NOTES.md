@@ -1,3 +1,11 @@
+# Luna 0.1.0-alpha.12
+
+Shared room sessions now have a local operator reset that targets their exact live route, retains previous history and refuses busy rooms or stale requests. Personal `/new` commands keep their existing scope. This maintenance tool uses the owning gateway's control socket; it is not a new group command or dashboard control.
+
+Runtime updates retain explicit stop-before-update behavior. Automatic companion pause/resume remains disabled. Installer cancellation and timeouts are bounded, and publication fences gateway runtime claims across the installation. Installed companion services remain conservatively blocked until their configuration is verified.
+
+Unsigned alpha preview. macOS requires version 14 or newer. Windows remains a preview. Updating code does not itself reset any live room session.
+
 # Luna 0.1.0-alpha.11
 
 - Give each group and topic its own `MEMORY.md` and `PEOPLE.md` entries, while keeping private owner notes scoped to owner DMs.

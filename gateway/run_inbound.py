@@ -1356,6 +1356,8 @@ class GatewayInboundMixin:
             return _paused_notice
 
         _quick_key = self._session_key_for_source(source)
+        if _quick_key in getattr(self, "_room_reset_keys", ()):
+            return None
         _reply = await self._hm_pending_reply_intercepts(event, source, _quick_key)
         if _reply is not None:
             return _reply
@@ -1390,6 +1392,10 @@ class GatewayInboundMixin:
                     "please resend shortly."
                 )
 
+        # Recheck after admission/command awaits. Local room maintenance installs
+        # its barrier before its first cleanup await, on this same event loop.
+        if _quick_key in getattr(self, "_room_reset_keys", ()):
+            return None
         # Claim this session before any await: many awaits sit between here and _run_agent
         # registering the real AIAgent; without this sentinel a second message during any of them
         # passes the "already running" guard and spins up a duplicate agent for the same session.
@@ -1933,7 +1939,8 @@ class GatewayInboundMixin:
     ) -> bool:
         """Route a plugin-triggered turn through the session's live adapter."""
         def _accepting() -> bool:
-            return getattr(self, "_running", False) and not getattr(self, "_draining", False)
+            return (getattr(self, "_running", False) and not getattr(self, "_draining", False)
+                    and session_key not in getattr(self, "_room_reset_keys", ()))
 
         if not _accepting():
             return False

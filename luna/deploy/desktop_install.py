@@ -2,9 +2,10 @@
 
 Runs at the final immutable path so Python environments remain relocatable within
 the installation contract. Publication is one atomic JSON replacement on every OS.
-No PATH changes, service registration, Docker setup or gateway starts occur here.
+Gateway lifecycle remains under the owner's control; stop companions before updating.
 """
 from pathlib import Path
+from contextlib import nullcontext
 import argparse
 import json
 import os
@@ -61,8 +62,8 @@ def _install(release, home, uv):
     except (OSError, ValueError, KeyError, TypeError):
         prior_record = {}
         old = home / "no-valid-previous-release"
+    old_python = old / ("venv/Scripts/python.exe" if os.name == "nt" else "venv/bin/python")
     if (old / ".ready").is_file():
-        old_python = old / ("venv/Scripts/python.exe" if os.name == "nt" else "venv/bin/python")
         run(old_python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
     print("LUNA_STAGE dependencies", flush=True)
     run(uv, "sync", "--project", release, "--python", "3.11", "--frozen", "--extra", "luna", "--no-dev", "--inexact")
@@ -77,34 +78,45 @@ def _install(release, home, uv):
             "-Stage", "git", "-NonInteractive", "-Json", "-HermesHome", home, "-InstallDir", release)
     run(python, "-I", "-X", "utf8", "-c", "import luna_core, luna_cli, gateway, model_tools, hermes_cli.web_server")
     (release / ".luna-state-home").write_text(str(home), encoding="utf-8")
-    print("LUNA_STAGE personal-home", flush=True)
-    # Seed through the existing product implementation, retaining existing settings.
-    run(python, "-c", "from hermes_cli.product_runtime import seed_home, default_soul; from pathlib import Path; import os; h=Path(os.environ['HERMES_HOME']); seed_home(h); p=h/'SOUL.md'; p.write_text(default_soul(), encoding='utf-8') if not p.exists() else None")
-    stack = home / "honcho"
-    if not stack.exists():
-        shutil.copytree(release / "luna/honcho", stack)
-    # This also protects repair when the old pointer is damaged or absent.
-    run(python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
-    if (old / ".ready").is_file():
-        # Recheck after downloads, since the owner could have started the old gateway meanwhile.
-        run(old_python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
-        from releases import _snapshot_state
-        _snapshot_state(home)
-    (release / ".ready").write_text("verified\n", encoding="utf-8")
-    if prior_record and (old / ".ready").is_file():
-        prior = prior_record
-        previous = {key: prior[key] for key in ("format", "path", "version") if key in prior}
-        atomic_json(home / "previous-release.json", previous)
-    elif (home / "current").is_dir():
-        previous = {"format": 1, "path": str((home / 'current').resolve().relative_to(home))}
-        atomic_json(home / "previous-release.json", previous)
-    else:
-        previous = None
-    if marker.exists() and not prior_record:
-        shutil.copy2(marker, home / (".invalid-release-pointer-" + release.name + ".json"))
-    atomic_json(marker, {"format": 1, "path": str(release.relative_to(home)),
-                         "version": json.loads((release / "luna-release.json").read_text())["version"], "previous": previous})
-    print("LUNA_STAGE ready", flush=True)
+    # Fail closed for installed services until their executable handoff is verified.
+    # This is independent of the disabled automatic pause/resume workflow.
+    from update_gateways import _check_owner
+    check_python = old_python if (old / ".ready").is_file() else python
+    for profile in [home, *sorted(p for p in (home / "profiles").glob("*") if p.is_dir())]:
+        _check_owner(check_python, profile)
+    # Automatic pause/resume is deliberately disabled until its lifecycle can be verified.
+    with nullcontext():
+        print("LUNA_STAGE personal-home", flush=True)
+        # Seed through the existing product implementation, retaining existing settings.
+        run(python, "-c", "from hermes_cli.product_runtime import seed_home, default_soul; from pathlib import Path; import os; h=Path(os.environ['HERMES_HOME']); seed_home(h); p=h/'SOUL.md'; p.write_text(default_soul(), encoding='utf-8') if not p.exists() else None")
+        stack = home / "honcho"
+        if not stack.exists():
+            shutil.copytree(release / "luna/honcho", stack)
+        # This also protects repair when the old pointer is damaged or absent.
+        run(python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
+        if (old / ".ready").is_file():
+            # Recheck after downloads, since the owner could have started the old gateway meanwhile.
+            run(old_python, "-I", "-X", "utf8", "-c", "from luna_core.data_ops import require_stopped; require_stopped()")
+        from update_gateways import stopped_gateway_locks
+        with stopped_gateway_locks(home):
+            if (old / ".ready").is_file():
+                from releases import _snapshot_state
+                _snapshot_state(home)
+            (release / ".ready").write_text("verified\n", encoding="utf-8")
+            if prior_record and (old / ".ready").is_file():
+                prior = prior_record
+                previous = {key: prior[key] for key in ("format", "path", "version") if key in prior}
+                atomic_json(home / "previous-release.json", previous)
+            elif (home / "current").is_dir():
+                previous = {"format": 1, "path": str((home / 'current').resolve().relative_to(home))}
+                atomic_json(home / "previous-release.json", previous)
+            else:
+                previous = None
+            if marker.exists() and not prior_record:
+                shutil.copy2(marker, home / (".invalid-release-pointer-" + release.name + ".json"))
+            atomic_json(marker, {"format": 1, "path": str(release.relative_to(home)),
+                                 "version": json.loads((release / "luna-release.json").read_text())["version"], "previous": previous})
+            print("LUNA_STAGE ready", flush=True)
 
 
 if __name__ == "__main__":

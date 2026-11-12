@@ -244,6 +244,7 @@ def main():
     root = installation()
     set_hermes_home_override(root)
     begin_update_receipt()
+    before = installed_version(root)
     try:
         version = install(discover(running_version()), root)
         record_step("Luna runtime verified and selected", True, version)
@@ -251,7 +252,16 @@ def main():
         finalize_update_receipt("success", stop_reason="Quit and reopen Luna to use the installed runtime")
         return 0
     except Exception as exc:
-        detail = str(exc) if isinstance(exc, (ValueError, BlockingIOError)) else "Luna could not finish installing. The previous runtime was retained; retry the update."
+        try:
+            selected = installed_version(root)
+        except Exception:
+            selected = before
+        if selected != before:
+            detail = f"Luna {selected} was installed, but the update did not finish cleanly. Reopen Luna and check Control Center."
+        elif isinstance(exc, (ValueError, BlockingIOError)):
+            detail = str(exc)
+        else:
+            detail = "Luna could not finish installing. The previous runtime was retained; check your companion in Control Center and retry."
         print(detail, flush=True)
         record_step("Luna release update", False, detail)
         finalize_update_receipt("failed", stop_reason=detail)

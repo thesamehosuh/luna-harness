@@ -694,6 +694,30 @@ def _release_file_lock(handle) -> None:
 
 
 def acquire_gateway_runtime_lock() -> bool:
+    """Claim startup under Luna's installation publication lock, then the home lock."""
+    if _gateway_lock_handle is not None:
+        return True
+    from hermes_cli.product_runtime import enabled, installation_home, code_root
+    if not enabled():
+        return _acquire_gateway_runtime_lock()
+    from hermes_cli._file_lock import acquire
+    root = installation_home(_get_process_hermes_home()).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        with (root / ".release.lock").open("a+") as lock:
+            acquire(lock, blocking=False)
+            # The entry point may have selected this release before waiting for
+            # publication. Refuse a stale start; the next launch resolves again.
+            running_root = Path(__file__).resolve().parent.parent
+            if ((running_root / ".luna-state-home").is_file()
+                    and code_root(root).resolve() != running_root):
+                return False
+            return _acquire_gateway_runtime_lock()
+    except BlockingIOError:
+        return False
+
+
+def _acquire_gateway_runtime_lock() -> bool:
     """Claim the cross-process runtime lock; the OS releases it if the process dies."""
     global _gateway_lock_handle
     if _gateway_lock_handle is not None:
