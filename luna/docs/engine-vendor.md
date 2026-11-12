@@ -595,6 +595,10 @@ directory lookup remains in `people.py`.
 
 Validation is run after implementation and before installing, per the operator's updated request.
 
+### Python dependency security refresh
+
+`pyproject.toml` and `uv.lock` select patched OAuthlib and pyasn1 releases. Matching pyasn1 pins in `tools/lazy_deps.py`, the Google Chat OAuth installer and the Google Workspace setup script prevent optional runtime installs from restoring the vulnerable version. Installer regressions exercise detection and repair of pyasn1 0.6.4.
+
 ### Local shared-room maintenance and runtime publication
 
 `gateway/run.py` registers owner-local room listing and reset control verbs in Luna mode. The overlay reuses the actual session reset lifecycle and verifies old/new database rows. `gateway/run_inbound.py` gates ordinary ingress and ambient injections while the exact shared route is being reset. Personal slash-command routing is unchanged.

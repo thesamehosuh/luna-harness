@@ -40,7 +40,7 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     # Vertex OAuth2 token minting; google-auth is NOT in [all] on purpose.
     "provider.vertex": (
         "google-auth==2.55.1",
-        "pyasn1==0.6.4",
+        "pyasn1==0.6.5",
     ),
     # Foundry Entra ID auth; only when model.auth_mode=entra_id.
     "provider.azure_identity": ("azure-identity==1.25.3",),
@@ -159,7 +159,7 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
         "google-auth-oauthlib==1.3.1",
         "google-auth-httplib2==0.3.1",
         "httplib2==0.32.0",
-        "pyasn1==0.6.4",
+        "pyasn1==0.6.5",
     ),
 
     # ─── Terminal backends ─────────────────────────────────────────────────
@@ -175,7 +175,7 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
         "google-auth-httplib2==0.3.1",
         # Explicit transitive pins: httplib2 <0.32 has a decompression-bomb DoS.
         "httplib2==0.32.0",
-        "pyasn1==0.6.4",
+        "pyasn1==0.6.5",
     ),
     "skill.youtube": ("youtube-transcript-api==1.2.4",),
 

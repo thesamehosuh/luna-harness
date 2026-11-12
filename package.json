@@ -63,13 +63,13 @@
     "@vitest/mocker": "4.1.12",
     "vite": "8.2.4",
     "sanitize-html": "2.18.1",
-    "follow-redirects": "1.16.1",
+    "follow-redirects": "1.16.2",
     "shell-quote": "1.11.0",
     "@simple-git/argv-parser": "2.0.1",
     "simple-git": "4.0.1",
     "katex": "0.18.2",
     "source-map-js": "1.2.2",
-    "joi": "18.2.9",
+    "joi": "18.3.1",
     "postcss-selector-parser": "7.1.6",
     "axios": "1.20.0",
     "@xmldom/xmldom": "0.9.12",
@@ -78,7 +78,9 @@
     "baseline-browser-mapping": "2.11.0",
     "browserslist": "4.28.7",
     "ink": "7.1.1",
-    "http-cache-semantics": "4.3.0"
+    "http-cache-semantics": "4.3.0",
+    "glob@>=9 <14.0.2": "14.0.2",
+    "minimatch@>=7 <11.0.1": "11.0.1"
   },
   "engines": {
     "node": "^22.22.0 || ^24.11.0 || >=26.0.0",
@@ -89,7 +91,7 @@
     "esbuild@0.28.1": true,
     "node-pty@1.1.0": true,
     "electron-winstaller@5.4.0": true,
-    "electron@40.10.2": true,
+    "electron@42.11.16": true,
     "fsevents@2.3.2": true,
     "fsevents@2.3.3": true,
     "get-windows@9.3.0": true

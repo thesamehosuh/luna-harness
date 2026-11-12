@@ -84,7 +84,7 @@ jobs:
           - runner: ubuntu-22.04-arm
             name: linux-arm64
             bundles: appimage,deb,rpm
-          - runner: macos-14
+          - runner: macos-15
             name: macos-arm64
             bundles: app,dmg
           - runner: macos-15-intel

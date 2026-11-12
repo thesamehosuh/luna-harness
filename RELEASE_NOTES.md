@@ -4,6 +4,8 @@ Shared room sessions now have a local operator reset that targets their exact li
 
 Runtime updates retain explicit stop-before-update behavior. Automatic companion pause/resume remains disabled. Installer cancellation and timeouts are bounded, and publication fences gateway runtime claims across the installation. Installed companion services remain conservatively blocked until their configuration is verified.
 
+Refresh Python and JavaScript dependency security fixes, including optional Google installers. Keep the full dependency audits and verified security backports enabled. Build macOS ARM64 artifacts on the supported macOS 15 runner while retaining the app's macOS 14 minimum.
+
 Unsigned alpha preview. macOS requires version 14 or newer. Windows remains a preview. Updating code does not itself reset any live room session.
 
 # Luna 0.1.0-alpha.11
